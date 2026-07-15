@@ -5,40 +5,37 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-      import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-      const firebaseConfig = {
-        apiKey: "AIzaSyATnqDDt5g4hUEGWCC_rwe8FBICUqE5-H4",
-        authDomain: "router-cd1fe.firebaseapp.com",
-        projectId: "router-cd1fe",
-        storageBucket: "router-cd1fe.firebasestorage.app",
-        messagingSenderId: "575486211386",
-        appId: "1:575486211386:web:796604ad4b34ad54c94c03"
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+    <script>
+      var SB_URL="https://jjitptktlzpyalwhvujv.supabase.co";
+      var SB_KEY="sb_publishable_th-SXFYO8VwZNMFhzSrIAQ__PG8liIC";
+      var sbClient=null;
+      function initSupabase(){
+        try{
+          sbClient=window.supabase.createClient(SB_URL,SB_KEY);
+          window.sbReady=true;
+          window.dispatchEvent(new Event("sbready"));
+        }catch(e){console.error("Supabase init failed:",e)}
+      }
+      window.sbSaveRoute=async function(name,payload){
+        var res=await sbClient.from("routes").insert([{name:name,data:JSON.stringify(payload)}]).select();
+        if(res.error)throw res.error;
+        return res.data[0].id;
       };
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
-      window.fbSaveRoute = async function(name, payload){
-        const ref = await addDoc(collection(db, "routes"), {name:name, saved:new Date().toISOString(), data:JSON.stringify(payload)});
-        return ref.id;
+      window.sbListRoutes=async function(){
+        var res=await sbClient.from("routes").select("id,name,created_at").order("created_at",{ascending:false});
+        if(res.error)throw res.error;
+        return res.data;
       };
-      window.fbListRoutes = async function(){
-        const snap = await getDocs(collection(db, "routes"));
-        const out = [];
-        snap.forEach(function(d){ var v=d.data(); out.push({id:d.id, name:v.name, saved:v.saved}); });
-        return out;
+      window.sbLoadRoute=async function(id){
+        var res=await sbClient.from("routes").select("data").eq("id",id).single();
+        if(res.error)throw res.error;
+        return JSON.parse(res.data.data);
       };
-      window.fbLoadRoute = async function(id){
-        const snap = await getDocs(collection(db, "routes"));
-        let found=null;
-        snap.forEach(function(d){ if(d.id===id){ found=JSON.parse(d.data().data); } });
-        return found;
+      window.sbDeleteRoute=async function(id){
+        var res=await sbClient.from("routes").delete().eq("id",id);
+        if(res.error)throw res.error;
       };
-      window.fbDeleteRoute = async function(id){
-        await deleteDoc(doc(db, "routes", id));
-      };
-      window.fbReady = true;
-      window.dispatchEvent(new Event("fbready"));
     </script>
 
     <style>
@@ -143,6 +140,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
+if(window.supabase)initSupabase();
 var allStores=[];
 var comp={};
 try{var ls0=localStorage.getItem("413comp");if(ls0)comp=JSON.parse(ls0)}catch(e){}
@@ -603,9 +601,9 @@ var cloudStatEl=document.getElementById("cloudstat");
 function setCloudStat(msg,color){cloudStatEl.textContent=msg;cloudStatEl.style.color=color||"#888"}
 
 function refreshCloudList(){
-    if(!window.fbReady){setCloudStat("Connecting to cloud...","#888");return}
+    if(!window.sbReady){setCloudStat("Connecting to cloud...","#888");return}
     setCloudStat("Loading route list...","#888");
-    window.fbListRoutes().then(function(list){
+    window.sbListRoutes().then(function(list){
         var sel=document.getElementById("cloudSel");
         sel.innerHTML="<option value=''>-- select a saved route --</option>";
         list.sort(function(a,b){return (b.saved||"").localeCompare(a.saved||"")});
@@ -623,17 +621,17 @@ function refreshCloudList(){
     });
 }
 
-window.addEventListener("fbready",refreshCloudList);
-if(window.fbReady)refreshCloudList();
+window.addEventListener("sbready",refreshCloudList);
+if(window.sbReady)refreshCloudList();
 
 document.getElementById("csavebtn").addEventListener("click",function(){
-    if(!window.fbReady){alert("Cloud not connected yet. Wait a moment and try again.");return}
+    if(!window.sbReady){alert("Cloud not connected yet. Wait a moment and try again.");return}
     if(curDays.length===0){alert("No route to save. Route something first.");return}
     var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
     if(!name)return;
     setCloudStat("Saving...","#888");
     var payload={allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp};
-    window.fbSaveRoute(name,payload).then(function(id){
+    window.sbSaveRoute(name,payload).then(function(id){
         setCloudStat("Saved to cloud","#4caf50");
         refreshCloudList();
     }).catch(function(err){
@@ -646,9 +644,9 @@ document.getElementById("csavebtn").addEventListener("click",function(){
 document.getElementById("cloadbtn").addEventListener("click",function(){
     var id=document.getElementById("cloudSel").value;
     if(!id){alert("Select a cloud route first.");return}
-    if(!window.fbReady){alert("Cloud not connected yet.");return}
+    if(!window.sbReady){alert("Cloud not connected yet.");return}
     setCloudStat("Loading route...","#888");
-    window.fbLoadRoute(id).then(function(data){
+    window.sbLoadRoute(id).then(function(data){
         if(!data||!data.allStores||!data.curDays){alert("Invalid cloud route.");return}
         allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};
         if(data.comp){comp=data.comp;saveC()}
@@ -668,7 +666,7 @@ document.getElementById("cdelbtn").addEventListener("click",function(){
     var name=sel.options[sel.selectedIndex].textContent;
     if(!confirm("Delete '"+name+"' from the cloud? This affects all users."))return;
     setCloudStat("Deleting...","#888");
-    window.fbDeleteRoute(id).then(function(){
+    window.sbDeleteRoute(id).then(function(){
         setCloudStat("Deleted","#4caf50");
         refreshCloudList();
     }).catch(function(err){
