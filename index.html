@@ -5,6 +5,42 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+      import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+      const firebaseConfig = {
+        apiKey: "AIzaSyATnqDDt5g4hUEGWCC_rwe8FBICUqE5-H4",
+        authDomain: "router-cd1fe.firebaseapp.com",
+        projectId: "router-cd1fe",
+        storageBucket: "router-cd1fe.firebasestorage.app",
+        messagingSenderId: "575486211386",
+        appId: "1:575486211386:web:796604ad4b34ad54c94c03"
+      };
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      window.fbSaveRoute = async function(name, payload){
+        const ref = await addDoc(collection(db, "routes"), {name:name, saved:new Date().toISOString(), data:JSON.stringify(payload)});
+        return ref.id;
+      };
+      window.fbListRoutes = async function(){
+        const snap = await getDocs(collection(db, "routes"));
+        const out = [];
+        snap.forEach(function(d){ var v=d.data(); out.push({id:d.id, name:v.name, saved:v.saved}); });
+        return out;
+      };
+      window.fbLoadRoute = async function(id){
+        const snap = await getDocs(collection(db, "routes"));
+        let found=null;
+        snap.forEach(function(d){ if(d.id===id){ found=JSON.parse(d.data().data); } });
+        return found;
+      };
+      window.fbDeleteRoute = async function(id){
+        await deleteDoc(doc(db, "routes", id));
+      };
+      window.fbReady = true;
+      window.dispatchEvent(new Event("fbready"));
+    </script>
+
     <style>
         body{margin:0;padding:0;background:#f5f5f5;font-family:'Helvetica Neue',Arial,sans-serif}
         #map{height:100vh;width:100vw}
@@ -34,8 +70,8 @@
         #rbtn{background:#3B79B4;color:#fff;display:none} #rbtn:hover{background:#2E6A9E}
         #lbtn{background:#fff;color:#3B79B4;border:1px solid #3B79B4!important} #lbtn:hover{background:#EDF4FB}
         #lbtn.active{background:#2E7D7B;color:#fff;border-color:#2E7D7B!important}
-        #sbtn,#ldbtn{background:#fff;color:#3D464D;border:1px solid #999!important;font-size:12px;padding:6px} 
-        #sbtn:hover,#ldbtn:hover{background:#f0f0f0}
+        #sbtn,#ldbtn,#cloadbtn,#cdelbtn{background:#fff;color:#3D464D;border:1px solid #999!important;font-size:12px;padding:6px} 
+        #sbtn:hover,#ldbtn:hover,#cloadbtn:hover,#cdelbtn:hover{background:#f0f0f0}
         .info{font-size:11px;color:#888;margin-top:6px}
         .gps-info{font-size:10px;color:#2E7D7B;margin-top:4px;display:none}
         .file-info{font-size:11px;color:#4caf50;margin-top:4px;display:none}
@@ -88,6 +124,16 @@
             <button class="abtn" id="ldbtn">Load Route</button>
         </div>
         <input type="file" id="routeIn" accept=".json" style="display:none">
+        <div class="sep"></div>
+        <label>Cloud Routes (shared)</label>
+        <select id="cloudSel"><option value="">-- select a saved route --</option></select>
+        <div class="row2">
+            <button class="abtn" id="cloadbtn">Load</button>
+            <button class="abtn" id="cdelbtn">Delete</button>
+        </div>
+        <button class="abtn" id="csavebtn" style="background:#2E7D7B;color:#fff;margin-top:6px">Save to Cloud</button>
+        <button class="abtn" id="clrbtn" style="background:#fff;color:#c0392b;border:1px solid #c0392b!important;margin-top:6px">Clear Route</button>
+        <div class="api-status" id="cloudstat"></div>
         <div class="info" id="rinfo"></div>
     </div>
     <div class="lg" id="legend"><div class="lg-t">Schedule</div></div>
@@ -547,6 +593,106 @@ document.getElementById("xbtn").addEventListener("click",function(){
     ws["!cols"]=[{wch:12},{wch:10},{wch:35},{wch:20},{wch:12},{wch:12},{wch:10},{wch:10},{wch:12}];
     var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Route Schedule");
     XLSX.writeFile(wb,"413_Route_Schedule.xlsx");
+});
+
+
+// ============================================================
+// FIREBASE CLOUD ROUTES
+// ============================================================
+var cloudStatEl=document.getElementById("cloudstat");
+function setCloudStat(msg,color){cloudStatEl.textContent=msg;cloudStatEl.style.color=color||"#888"}
+
+function refreshCloudList(){
+    if(!window.fbReady){setCloudStat("Connecting to cloud...","#888");return}
+    setCloudStat("Loading route list...","#888");
+    window.fbListRoutes().then(function(list){
+        var sel=document.getElementById("cloudSel");
+        sel.innerHTML="<option value=''>-- select a saved route --</option>";
+        list.sort(function(a,b){return (b.saved||"").localeCompare(a.saved||"")});
+        list.forEach(function(r){
+            var opt=document.createElement("option");
+            opt.value=r.id;
+            var dt=r.saved?r.saved.slice(0,10):"";
+            opt.textContent=r.name+(dt?" ("+dt+")":"");
+            sel.appendChild(opt);
+        });
+        setCloudStat(list.length+" cloud routes available","#4caf50");
+    }).catch(function(err){
+        console.error("Cloud list error:",err);
+        setCloudStat("Cloud error: "+err.message,"#f44336");
+    });
+}
+
+window.addEventListener("fbready",refreshCloudList);
+if(window.fbReady)refreshCloudList();
+
+document.getElementById("csavebtn").addEventListener("click",function(){
+    if(!window.fbReady){alert("Cloud not connected yet. Wait a moment and try again.");return}
+    if(curDays.length===0){alert("No route to save. Route something first.");return}
+    var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
+    if(!name)return;
+    setCloudStat("Saving...","#888");
+    var payload={allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp};
+    window.fbSaveRoute(name,payload).then(function(id){
+        setCloudStat("Saved to cloud","#4caf50");
+        refreshCloudList();
+    }).catch(function(err){
+        console.error("Cloud save error:",err);
+        setCloudStat("Save failed: "+err.message,"#f44336");
+        alert("Cloud save failed: "+err.message);
+    });
+});
+
+document.getElementById("cloadbtn").addEventListener("click",function(){
+    var id=document.getElementById("cloudSel").value;
+    if(!id){alert("Select a cloud route first.");return}
+    if(!window.fbReady){alert("Cloud not connected yet.");return}
+    setCloudStat("Loading route...","#888");
+    window.fbLoadRoute(id).then(function(data){
+        if(!data||!data.allStores||!data.curDays){alert("Invalid cloud route.");return}
+        allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};
+        if(data.comp){comp=data.comp;saveC()}
+        placePins();updInfo();restoreView();saveRouteLS();
+        document.getElementById("rbtn").style.display="block";
+        setCloudStat("Route loaded","#4caf50");
+    }).catch(function(err){
+        console.error("Cloud load error:",err);
+        setCloudStat("Load failed: "+err.message,"#f44336");
+    });
+});
+
+document.getElementById("cdelbtn").addEventListener("click",function(){
+    var sel=document.getElementById("cloudSel");
+    var id=sel.value;
+    if(!id){alert("Select a cloud route to delete.");return}
+    var name=sel.options[sel.selectedIndex].textContent;
+    if(!confirm("Delete '"+name+"' from the cloud? This affects all users."))return;
+    setCloudStat("Deleting...","#888");
+    window.fbDeleteRoute(id).then(function(){
+        setCloudStat("Deleted","#4caf50");
+        refreshCloudList();
+    }).catch(function(err){
+        console.error("Cloud delete error:",err);
+        setCloudStat("Delete failed: "+err.message,"#f44336");
+    });
+});
+
+// ============================================================
+// CLEAR ROUTE
+// ============================================================
+document.getElementById("clrbtn").addEventListener("click",function(){
+    if(!confirm("Clear the current route from view? (Cloud and file saves are not affected.)"))return;
+    curDays=[];legD={};ovnD={};
+    clearRoutes();
+    Object.keys(mkrs).forEach(function(sid){
+        var m=mkrs[sid];m.dayIdx=-1;m.idx=0;m.tot=0;m.col="#aaa";
+        var d2=!!comp[sid];
+        m.mk.setStyle({fillColor:d2?"#999":"#aaa",color:d2?"#666":"#fff",fillOpacity:d2?0.4:0.6});
+    });
+    document.getElementById("legend").style.display="none";
+    document.getElementById("xbtn").style.display="none";
+    try{localStorage.removeItem("413route")}catch(e){}
+    statusEl.style.display="none";
 });
 
 // ============================================================
