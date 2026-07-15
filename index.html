@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>413 Solution - Route Planner</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+    <style>
+        body{margin:0;padding:0;background:#f5f5f5;font-family:'Helvetica Neue',Arial,sans-serif}
+        #map{height:100vh;width:100vw}
+        .leaflet-popup-content-wrapper{background:#fff;color:#333;border-radius:6px;border:1px solid #3B79B4;box-shadow:0 2px 8px rgba(0,0,0,.1);min-width:230px}
+        .leaflet-popup-tip{background:#fff}
+        .pt{font-weight:bold;color:#3B79B4;font-size:1.1em;margin-bottom:5px;border-bottom:1px solid #ddd;padding-bottom:4px}
+        .pd{margin:3px 0;font-size:0.9em;color:#555} .hl{color:#222;font-weight:bold}
+        .ov{background:#EDF4FB;border:1px solid #B5D4F4;border-radius:4px;padding:5px 8px;margin:6px 0;font-size:0.85em;color:#3B79B4} .ov b{color:#222}
+        .cb{display:inline-block;padding:5px 14px;margin-top:8px;border-radius:5px;border:1px solid #3B79B4;font-size:0.85em;font-weight:600;cursor:pointer;background:#fff;color:#3B79B4}
+        .cb:hover{background:#EDF4FB} .cb.dn{background:#3D464D;color:#fff;border-color:#3D464D}
+        .lg{position:absolute;top:10px;right:10px;z-index:1000;background:rgba(255,255,255,.93);border-radius:6px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,.12);border:1px solid #ddd;font-size:12px;line-height:1.8;max-height:90vh;overflow-y:auto;display:none}
+        .lg-t{font-weight:700;color:#3B79B4;font-size:13px;margin-bottom:4px;border-bottom:1px solid #e0e0e0;padding-bottom:3px}
+        .lg-r{display:flex;align-items:center;gap:7px;cursor:pointer;padding:1px 4px;border-radius:3px}
+        .lg-r:hover{background:#f0f0f0} .lg-r.off{opacity:.3}
+        .lg-d{width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,.1);flex-shrink:0}
+        .lg-c{color:#999;margin-left:auto;padding-left:10px}
+        #status{position:absolute;bottom:10px;left:10px;z-index:1000;background:rgba(255,255,255,.9);border-radius:6px;padding:8px 14px;font-size:12px;color:#3B79B4;box-shadow:0 2px 6px rgba(0,0,0,.1);border:1px solid #B5D4F4;display:none}
+        #xbtn{position:absolute;bottom:10px;right:10px;z-index:1000;background:#3B79B4;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);display:none}
+        #xbtn:hover{background:#2E6A9E}
+        #panel{position:absolute;top:10px;left:10px;z-index:1000;background:rgba(255,255,255,.97);border-radius:8px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.12);border:1px solid #ddd;font-size:12px;width:250px;max-height:92vh;overflow-y:auto}
+        #panel .title{font-weight:700;color:#3B79B4;font-size:14px;margin-bottom:10px;border-bottom:1px solid #e0e0e0;padding-bottom:6px}
+        #panel label{display:block;font-weight:600;color:#3B79B4;margin:8px 0 3px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+        #panel input,#panel select{width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box}
+        #panel input:disabled{background:#f0f0f0;color:#999}
+        #panel input[type=file]{padding:4px;font-size:11px}
+        .abtn{width:100%;margin-top:8px;padding:8px;border:none;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;display:block;text-align:center;box-sizing:border-box}
+        #rbtn{background:#3B79B4;color:#fff;display:none} #rbtn:hover{background:#2E6A9E}
+        #lbtn{background:#fff;color:#3B79B4;border:1px solid #3B79B4!important} #lbtn:hover{background:#EDF4FB}
+        #lbtn.active{background:#2E7D7B;color:#fff;border-color:#2E7D7B!important}
+        #sbtn,#ldbtn{background:#fff;color:#3D464D;border:1px solid #999!important;font-size:12px;padding:6px} 
+        #sbtn:hover,#ldbtn:hover{background:#f0f0f0}
+        .info{font-size:11px;color:#888;margin-top:6px}
+        .gps-info{font-size:10px;color:#2E7D7B;margin-top:4px;display:none}
+        .file-info{font-size:11px;color:#4caf50;margin-top:4px;display:none}
+        .api-status{font-size:10px;margin-top:3px}
+        .sep{border-top:1px solid #e8e8e8;margin:10px 0 2px}
+        .cols{display:none;margin-top:6px;padding:8px;background:#fafafa;border-radius:4px;border:1px solid #eee}
+        .cols label{margin:4px 0 2px;font-size:10px}
+        .cols select{font-size:11px;padding:3px 4px}
+        .row2{display:flex;gap:6px}
+        .row2 button{flex:1}
+    </style>
+</head>
+<body>
+    <div id="panel">
+        <div class="title">413 Route Planner</div>
+        <label>Google Maps API Key (optional)</label>
+        <input type="password" id="gkey" placeholder="Paste key for traffic-aware times">
+        <div class="api-status" id="astat"></div>
+        <label>Upload Schedule (XLS, XLSX, CSV)</label>
+        <input type="file" id="fileIn" accept=".xlsx,.xls,.csv">
+        <div class="file-info" id="finfo"></div>
+        <div class="cols" id="colMap">
+            <label>Store / Location ID</label><select id="cSid"></select>
+            <label>Address</label><select id="cAddr"></select>
+            <label>City</label><select id="cCity"></select>
+            <label>Latitude</label><select id="cLat"></select>
+            <label>Longitude</label><select id="cLon"></select>
+        </div>
+        <div class="sep"></div>
+        <label>Start Date</label>
+        <input type="date" id="rdate">
+        <label>Start Time</label>
+        <input type="time" id="rtime" value="07:00">
+        <label>Last Arrival By</label>
+        <select id="cutoff">
+            <option value="960">4:00 PM</option>
+            <option value="990">4:30 PM</option>
+            <option value="1020" selected>5:00 PM</option>
+            <option value="1050">5:30 PM</option>
+            <option value="1080">6:00 PM</option>
+        </select>
+        <label>Max Stores Per Week</label>
+        <input type="number" id="maxpw" value="40" min="1" max="200">
+        <button class="abtn" id="lbtn">Use Current Location &amp; Time</button>
+        <div class="gps-info" id="ginfo"></div>
+        <button class="abtn" id="rbtn">Route It</button>
+        <div class="sep"></div>
+        <div class="row2">
+            <button class="abtn" id="sbtn">Save Route</button>
+            <button class="abtn" id="ldbtn">Load Route</button>
+        </div>
+        <input type="file" id="routeIn" accept=".json" style="display:none">
+        <div class="info" id="rinfo"></div>
+    </div>
+    <div class="lg" id="legend"><div class="lg-t">Schedule</div></div>
+    <div id="status"></div>
+    <button id="xbtn">Export XLS</button>
+    <div id="map"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+var allStores=[];
+var comp={};
+try{var ls0=localStorage.getItem("413comp");if(ls0)comp=JSON.parse(ls0)}catch(e){}
+function saveC(){try{localStorage.setItem("413comp",JSON.stringify(comp))}catch(e){}}
+function saveRouteLS(){try{localStorage.setItem("413route",JSON.stringify({curDays:curDays,legD:legD,ovnD:ovnD,allStores:allStores}))}catch(e){}}
+function loadRouteLS(){try{var r=localStorage.getItem("413route");if(!r)return null;return JSON.parse(r)}catch(e){return null}}
+
+var map=L.map("map").setView([38,-96],4);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"413 Solution LLC",maxZoom:19}).addTo(map);
+
+// ============================================================
+// GOOGLE MAPS API KEY + LOADER
+// ============================================================
+var gkeyEl=document.getElementById("gkey");
+var astatEl=document.getElementById("astat");
+var gmapsReady=false;
+var gDirSvc=null;
+
+try{var sk=localStorage.getItem("413gkey");if(sk)gkeyEl.value=sk}catch(e){}
+
+function loadGMaps(key){
+    if(!key){astatEl.textContent="No key - using OSRM (free, no traffic data)";astatEl.style.color="#888";return}
+    if(gmapsReady){astatEl.textContent="Google Directions active";astatEl.style.color="#4caf50";return}
+    astatEl.textContent="Loading Google Maps...";astatEl.style.color="#888";
+    window.gmapsInit=function(){
+        gmapsReady=true;
+        gDirSvc=new google.maps.DirectionsService();
+        astatEl.textContent="Google Directions active (traffic-aware)";
+        astatEl.style.color="#4caf50";
+    };
+    var s=document.createElement("script");
+    s.src="https://maps.googleapis.com/maps/api/js?key="+encodeURIComponent(key)+"&callback=gmapsInit";
+    s.onerror=function(){astatEl.textContent="Google Maps failed to load - check key. Using OSRM.";astatEl.style.color="#f44336"};
+    document.head.appendChild(s);
+}
+gkeyEl.addEventListener("change",function(){
+    var k=gkeyEl.value.trim();
+    try{localStorage.setItem("413gkey",k)}catch(e){}
+    loadGMaps(k);
+});
+if(gkeyEl.value.trim())loadGMaps(gkeyEl.value.trim());
+else{astatEl.textContent="No key - using OSRM (free, no traffic data)";astatEl.style.color="#888"}
+
+// ============================================================
+// GPS
+// ============================================================
+var userMkr=null,userLat=null,userLon=null,liveMode=false;
+var gpsEl=document.getElementById("ginfo");
+if(navigator.geolocation)navigator.geolocation.watchPosition(function(p){
+    userLat=p.coords.latitude;userLon=p.coords.longitude;
+    var ll=[userLat,userLon];
+    if(userMkr)userMkr.setLatLng(ll);
+    else userMkr=L.marker(ll,{icon:L.divIcon({html:"<div style='width:16px;height:16px;background:#3B79B4;border:3px solid #fff;border-radius:50%;box-shadow:0 0 10px rgba(59,121,180,.5)'></div>",iconSize:[16,16],iconAnchor:[8,8]}),zIndexOffset:1000}).addTo(map).bindPopup("<b style='color:#3B79B4'>Your Location</b>");
+    if(liveMode){gpsEl.style.display="block";gpsEl.textContent="GPS: "+userLat.toFixed(4)+", "+userLon.toFixed(4)+" ("+Math.round(p.coords.accuracy)+"m)"}
+},function(){},{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
+
+var lbtn=document.getElementById("lbtn");
+lbtn.addEventListener("click",function(){
+    liveMode=!liveMode;
+    if(liveMode){lbtn.classList.add("active");lbtn.textContent="Live Mode ON - Click to Disable";document.getElementById("rdate").disabled=true;document.getElementById("rtime").disabled=true;gpsEl.style.display="block";gpsEl.textContent=userLat?"GPS: "+userLat.toFixed(4)+", "+userLon.toFixed(4):"Waiting for GPS..."}
+    else{lbtn.classList.remove("active");lbtn.textContent="Use Current Location & Time";document.getElementById("rdate").disabled=false;document.getElementById("rtime").disabled=false;gpsEl.style.display="none"}
+});
+
+var colors=["#f44336","#ff9800","#ffeb3b","#4caf50","#00bcd4","#2196f3","#9c27b0","#e91e63","#00e676","#ff5722","#795548","#607d8b","#8bc34a","#ff4081","#3f51b5","#009688","#cddc39","#ffc107","#673ab7","#03a9f4","#f06292","#aed581","#ba68c8","#4db6ac","#dce775"];
+var mkrs={},routeLayers=[],legD={},ovnD={},curDays=[];
+var statusEl=document.getElementById("status");
+var dnArr=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+function ft(m){var h=Math.floor(m/60),mn=Math.round(m%60),ap=h<12?"AM":"PM";var h12=h<=12?h:h-12;if(h12===0)h12=12;return h12+":"+(mn<10?"0":"")+mn+" "+ap}
+function dateLbl(d){var dt=new Date(d+"T12:00:00");return dnArr[dt.getDay()]+" "+(dt.getMonth()+1)+"/"+dt.getDate()}
+function nextWeekday(d){var dt=new Date(d+"T12:00:00");dt.setDate(dt.getDate()+1);while(dt.getDay()===0||dt.getDay()===6)dt.setDate(dt.getDate()+1);return dt.toISOString().slice(0,10)}
+function mondayOf(d){var dt=new Date(d+"T12:00:00");var day=dt.getDay();var diff=(day===0)?-6:1-day;dt.setDate(dt.getDate()+diff);return dt.toISOString().slice(0,10)}
+function nextMonday(d){var dt=new Date(d+"T12:00:00");dt.setDate(dt.getDate()+((8-dt.getDay())%7||7));return dt.toISOString().slice(0,10)}
+
+function pp(dayIdx,sid,addr,city,idx,tot){
+    var done=!!comp[sid],day=curDays[dayIdx]||{},lbl=day.label||"",ld=legD[sid]||{};
+    var arr=ld.arrival||"",dep=ld.departure||"",drv="";
+    if(idx===0){var o=ovnD["f_"+sid];if(o)drv="<div class='ov'>"+o.type+" from <b>"+o.fr+"</b><br>"+o.dt+" ("+o.mi+" mi)</div>";else drv="<div class='pd' style='color:#3B79B4'>First store of day</div>"}
+    else if(ld.minutes!==undefined)drv="<div class='pd'>Transit from Prev: <span class='hl'>"+ld.minutes+" min</span> ("+ld.miles+" mi)</div>";
+    var eod="";if(idx===tot-1&&ovnD[sid]){var o2=ovnD[sid];eod="<div class='ov'>Tonight to <b>"+o2.to+"</b><br>"+o2.dt+" ("+o2.mi+" mi)</div>"}
+    return "<div><div class='pt'>"+lbl+" - Stop "+(idx+1)+"/"+tot+"</div><div class='pd'>Store #: <span class='hl'>"+sid+"</span></div><div class='pd'>"+addr+"<br>"+city+"</div><br/>"+(arr?"<div class='pd'>Arrival: <span class='hl'>"+arr+"</span></div>":"")+(dep?"<div class='pd'>Departure: <span class='hl'>"+dep+"</span></div>":"")+drv+eod+"<div class='"+(done?"cb dn":"cb")+"' data-sid='"+sid+"'>"+(done?"COMPLETED - UNDO?":"MARK COMPLETE")+"</div></div>";
+}
+
+function placePins(){
+    Object.keys(mkrs).forEach(function(sid){map.removeLayer(mkrs[sid].mk)});mkrs={};
+    var allB=[];
+    allStores.forEach(function(s){
+        var sid=s[0],addr=s[1],city=s[2],lat=s[3],lon=s[4];allB.push([lat,lon]);
+        var d2=!!comp[sid];
+        var mk=L.circleMarker([lat,lon],{radius:7,fillColor:d2?"#999":"#aaa",color:d2?"#666":"#fff",weight:2,opacity:1,fillOpacity:d2?0.4:0.6}).addTo(map);
+        mk.bindPopup(function(){var m=mkrs[sid];return pp(m.dayIdx,sid,addr,city,m.idx,m.tot)});
+        mkrs[sid]={mk:mk,col:"#aaa",dayIdx:-1,addr:addr,city:city,idx:0,tot:0};
+    });
+    if(allB.length)map.fitBounds(allB,{padding:[30,30]});
+}
+
+document.addEventListener("click",function(e){
+    var btn=e.target.closest(".cb");if(!btn)return;
+    var sid=btn.getAttribute("data-sid");if(!sid)return;
+    if(comp[sid])delete comp[sid];else comp[sid]=true;saveC();
+    var m=mkrs[sid];if(m){var d2=!!comp[sid];m.mk.setStyle({fillColor:d2?"#999":m.col,color:d2?"#666":"#fff",fillOpacity:d2?0.4:0.9});m.mk.getPopup().setContent(pp(m.dayIdx,sid,m.addr,m.city,m.idx,m.tot))}
+    updInfo();
+});
+
+function updInfo(){var done=0;allStores.forEach(function(s){if(comp[s[0]])done++});document.getElementById("rinfo").textContent=allStores.length?done+"/"+allStores.length+" completed, "+(allStores.length-done)+" remaining":""}
+
+// ============================================================
+// FILE UPLOAD
+// ============================================================
+var parsedHeaders=[],parsedRows=[];
+document.getElementById("fileIn").addEventListener("change",function(e){
+    var file=e.target.files[0];if(!file)return;
+    var finfo=document.getElementById("finfo");
+    finfo.style.display="block";finfo.textContent="Reading "+file.name+"...";finfo.style.color="#888";
+    var reader=new FileReader();
+    reader.onload=function(ev){
+        var wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
+        var json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
+        if(json.length<2){finfo.textContent="No data found";finfo.style.color="#f44336";return}
+        var hdrIdx=0;
+        for(var i=0;i<Math.min(5,json.length);i++){
+            var filled=json[i].filter(function(c){return c!==null&&c!==undefined&&String(c).trim()!==""}).length;
+            if(filled>=3){hdrIdx=i;break}
+        }
+        parsedHeaders=json[hdrIdx].map(function(h){return String(h||"").trim()});
+        parsedRows=json.slice(hdrIdx+1).filter(function(r){
+            if(r.length===0)return false;
+            var v=String(r[0]===null||r[0]===undefined?"":r[0]).trim();
+            return v!==""&&v!=="Store #"&&v!=="Consultant:"&&v!=="0";
+        });
+        finfo.textContent=parsedRows.length+" locations found";finfo.style.color="#4caf50";
+        var colMapEl=document.getElementById("colMap");colMapEl.style.display="block";
+        var sels=["cSid","cAddr","cCity","cLat","cLon"];
+        var pats={cSid:/store|id|loc|#|number|name/i,cAddr:/addr|street/i,cCity:/city|town/i,cLat:/lat/i,cLon:/lon|lng/i};
+        sels.forEach(function(sel){
+            var el=document.getElementById(sel);el.innerHTML="<option value='-1'>-- select --</option>";
+            var matched=false;
+            parsedHeaders.forEach(function(h,i){
+                var opt=document.createElement("option");opt.value=i;opt.textContent=h;
+                if(!matched&&pats[sel]&&pats[sel].test(h)){opt.selected=true;matched=true}
+                el.appendChild(opt);
+            });
+        });
+        document.getElementById("rbtn").style.display="block";
+        if(!document.getElementById("rdate").value)document.getElementById("rdate").value=new Date().toISOString().slice(0,10);
+    };
+    reader.readAsArrayBuffer(file);
+});
+
+// ============================================================
+// ROUTING BACKENDS
+// ============================================================
+function osrmLegs(points,callback){
+    var allLegs=[];if(points.length<2){callback(allLegs);return}
+    var bs=80,batches=[];
+    for(var i=0;i<points.length;i+=bs-1){var end=Math.min(i+bs,points.length);batches.push(points.slice(i,end));if(end>=points.length)break}
+    var bi=0;
+    function nb(){
+        if(bi>=batches.length){callback(allLegs);return}
+        var batch=batches[bi];var c=batch.map(function(p){return p[0]+","+p[1]}).join(";");
+        statusEl.textContent="OSRM drive times... batch "+(bi+1)+"/"+batches.length;
+        fetch("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false").then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(function(data){
+            if(data.code!=="Ok")throw new Error(data.code);
+            data.routes[0].legs.forEach(function(leg){allLegs.push({mi:Math.round(leg.distance*0.000621371*10)/10,mins:Math.round(leg.duration/60)})});
+            bi++;setTimeout(nb,200);
+        }).catch(function(err){
+            console.error("OSRM batch "+bi,err);var b2=batches[bi];
+            for(var j=0;j<b2.length-1;j++){var a=b2[j],b=b2[j+1];var dlat=(b[1]-a[1])*Math.PI/180,dlon=(b[0]-a[0])*Math.PI/180;var x=Math.sin(dlat/2)*Math.sin(dlat/2)+Math.cos(a[1]*Math.PI/180)*Math.cos(b[1]*Math.PI/180)*Math.sin(dlon/2)*Math.sin(dlon/2);var mi=3959*2*Math.asin(Math.sqrt(x))*1.4;allLegs.push({mi:Math.round(mi*10)/10,mins:Math.round(mi/45*60)})}
+            bi++;setTimeout(nb,200);
+        });
+    }
+    nb();
+}
+
+function googleLegs(points,callback){
+    // points = [[lon,lat],...] - chunk into requests of max 25 points
+    var allLegs=[];
+    if(points.length<2){callback(allLegs);return}
+    var chunkSize=25;
+    var chunks=[];
+    for(var i=0;i<points.length;i+=chunkSize-1){
+        var end=Math.min(i+chunkSize,points.length);
+        chunks.push(points.slice(i,end));
+        if(end>=points.length)break;
+    }
+    var ci=0;
+    function nc(){
+        if(ci>=chunks.length){callback(allLegs);return}
+        var chunk=chunks[ci];
+        statusEl.textContent="Google drive times... batch "+(ci+1)+"/"+chunks.length;
+        var origin={lat:chunk[0][1],lng:chunk[0][0]};
+        var dest={lat:chunk[chunk.length-1][1],lng:chunk[chunk.length-1][0]};
+        var wps=chunk.slice(1,-1).map(function(p){return{location:{lat:p[1],lng:p[0]},stopover:true}});
+        gDirSvc.route({origin:origin,destination:dest,waypoints:wps,travelMode:google.maps.TravelMode.DRIVING},function(res,status){
+            if(status==="OK"&&res.routes.length){
+                res.routes[0].legs.forEach(function(leg){
+                    allLegs.push({mi:Math.round(leg.distance.value*0.000621371*10)/10,mins:Math.round(leg.duration.value/60)});
+                });
+                ci++;setTimeout(nc,300);
+            } else {
+                console.error("Google Directions status:",status,"- falling back to OSRM for this chunk");
+                // OSRM fallback for this chunk
+                var c=chunk.map(function(p){return p[0]+","+p[1]}).join(";");
+                fetch("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false").then(function(r){return r.json()}).then(function(data){
+                    if(data.code==="Ok"){data.routes[0].legs.forEach(function(leg){allLegs.push({mi:Math.round(leg.distance*0.000621371*10)/10,mins:Math.round(leg.duration/60)})})}
+                    else{for(var j=0;j<chunk.length-1;j++)allLegs.push({mi:0,mins:15})}
+                    ci++;setTimeout(nc,300);
+                }).catch(function(){for(var j=0;j<chunk.length-1;j++)allLegs.push({mi:0,mins:15});ci++;setTimeout(nc,300)});
+            }
+        });
+    }
+    nc();
+}
+
+function getLegs(points,callback){
+    if(gmapsReady&&gDirSvc)googleLegs(points,callback);
+    else osrmLegs(points,callback);
+}
+
+// Route geometry per day: Google overview_path if available, else OSRM
+function getDayGeometry(sts,callback){
+    if(gmapsReady&&gDirSvc&&sts.length>=2&&sts.length<=25){
+        var origin={lat:sts[0].s[3],lng:sts[0].s[4]};
+        var dest={lat:sts[sts.length-1].s[3],lng:sts[sts.length-1].s[4]};
+        var wps=sts.slice(1,-1).map(function(st){return{location:{lat:st.s[3],lng:st.s[4]},stopover:true}});
+        gDirSvc.route({origin:origin,destination:dest,waypoints:wps,travelMode:google.maps.TravelMode.DRIVING},function(res,status){
+            if(status==="OK"&&res.routes.length){
+                callback(res.routes[0].overview_path.map(function(p){return[p.lat(),p.lng()]}));
+            } else callback(null);
+        });
+        return;
+    }
+    // OSRM
+    var c=sts.map(function(st){return st.s[4]+","+st.s[3]}).join(";");
+    fetch("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=full&geometries=geojson&steps=false").then(function(r){return r.json()}).then(function(data){
+        if(data.code==="Ok")callback(data.routes[0].geometry.coordinates.map(function(c){return[c[1],c[0]]}));
+        else callback(null);
+    }).catch(function(){callback(null)});
+}
+
+// ============================================================
+// CUT DAYS: arrive by cutoff, cap per week, skip weekends
+// ============================================================
+function cutDays(remaining,legs,startDate,startMin,hasGPS){
+    var days=[],curDate=startDate,clock=startMin,curStores=[];
+    var maxArrival=parseInt(document.getElementById("cutoff").value);
+    var maxWeek=parseInt(document.getElementById("maxpw").value);
+    var weekCounts={};
+    var legOff=hasGPS?1:0;
+
+    function wk(d){return mondayOf(d)}
+    function advanceDay(){
+        if(curStores.length>0){days.push({date:curDate,label:dateLbl(curDate),stores:curStores.slice()});curStores=[]}
+        curDate=nextWeekday(curDate);clock=7*60;
+    }
+    function advanceWeek(){
+        if(curStores.length>0){days.push({date:curDate,label:dateLbl(curDate),stores:curStores.slice()});curStores=[]}
+        curDate=nextMonday(curDate);clock=7*60;
+    }
+
+    for(var i=0;i<remaining.length;i++){
+        // Weekly cap check
+        var wkKey=wk(curDate);
+        if((weekCounts[wkKey]||0)>=maxWeek){advanceWeek();wkKey=wk(curDate)}
+
+        var dm=0,dmi=0;
+        if(i===0&&hasGPS){dm=legs[0].mins;dmi=legs[0].mi}
+        else if(curStores.length>0){var li=i-1+legOff;if(li<legs.length){dm=legs[li].mins;dmi=legs[li].mi}}
+
+        var arrival=clock+dm;
+        if(arrival>maxArrival&&curStores.length>0){
+            advanceDay();
+            // Recheck weekly cap after day advance
+            wkKey=wk(curDate);
+            if((weekCounts[wkKey]||0)>=maxWeek){advanceWeek();wkKey=wk(curDate)}
+            arrival=clock;dm=0;dmi=0;
+        }
+
+        curStores.push({s:remaining[i],arrival:arrival,driveMin:dm,mi:dmi});
+        weekCounts[wkKey]=(weekCounts[wkKey]||0)+1;
+        clock=arrival+30;
+    }
+    if(curStores.length>0)days.push({date:curDate,label:dateLbl(curDate),stores:curStores.slice()});
+    return days;
+}
+
+function clearRoutes(){routeLayers.forEach(function(l){map.removeLayer(l)});routeLayers=[]}
+
+function drawDays(days,callback){
+    curDays=days;clearRoutes();legD={};ovnD={};
+    Object.keys(mkrs).forEach(function(sid){var m=mkrs[sid];m.dayIdx=-1;m.idx=0;m.tot=0;m.col="#aaa";if(!comp[sid])m.mk.setStyle({fillColor:"#aaa",color:"#fff",fillOpacity:0.6})});
+    days.forEach(function(day,di){
+        var col=colors[di%colors.length];
+        day.stores.forEach(function(st,si){
+            var sid=st.s[0];legD[sid]={arrival:ft(st.arrival),departure:ft(st.arrival+30),minutes:st.driveMin,miles:st.mi};
+            var m=mkrs[sid];if(m){m.dayIdx=di;m.idx=si;m.tot=day.stores.length;m.col=col;if(!comp[sid])m.mk.setStyle({fillColor:col,color:"#fff",fillOpacity:0.9})}
+        });
+    });
+    for(var i=0;i<days.length-1;i++){var ls=days[i].stores[days[i].stores.length-1],fs=days[i+1].stores[0];ovnD[ls.s[0]]={to:fs.s[2],dt:"...",mi:"..."};ovnD["f_"+fs.s[0]]={fr:ls.s[2],dt:"...",mi:"...",type:"Overnight"}}
+    var di=0;
+    function ndr(){
+        if(di>=days.length){fetchOvn(days,function(){statusEl.style.display="none";document.getElementById("xbtn").style.display="block";document.getElementById("legend").style.display="block";buildLeg(days);saveRouteLS();if(callback)callback()});return}
+        var day=days[di],sts=day.stores;
+        if(sts.length<2){routeLayers.push(L.layerGroup().addTo(map));di++;setTimeout(ndr,100);return}
+        var col=colors[di%colors.length];
+        statusEl.textContent="Drawing route "+(di+1)+"/"+days.length+"...";
+        getDayGeometry(sts,function(geom){
+            if(geom)routeLayers.push(L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map));
+            else routeLayers.push(L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map));
+            di++;setTimeout(ndr,300);
+        });
+    }
+    ndr();
+}
+
+function fetchOvn(days,callback){
+    var pairs=[];for(var i=0;i<days.length-1;i++){var ls=days[i].stores[days[i].stores.length-1],fs=days[i+1].stores[0];pairs.push({fs:ls.s[0],fc:ls.s[2],flat:ls.s[3],flon:ls.s[4],ts:fs.s[0],tc:fs.s[2],tlat:fs.s[3],tlon:fs.s[4]})}
+    var pi=0;
+    function next(){if(pi>=pairs.length){callback();return}var p=pairs[pi];
+        fetch("https://router.project-osrm.org/route/v1/driving/"+p.flon+","+p.flat+";"+p.tlon+","+p.tlat+"?overview=false").then(function(r){return r.json()}).then(function(data){if(data.code==="Ok"){var rt=data.routes[0],mi=Math.round(rt.distance*0.000621371*10)/10,mins=Math.round(rt.duration/60),h=Math.floor(mins/60),m=mins%60,dt=h>0?h+"hr "+m+"min":m+"min";ovnD[p.fs]={to:p.tc,dt:dt,mi:mi};ovnD["f_"+p.ts]={fr:p.fc,dt:dt,mi:mi,type:"Overnight"}}pi++;setTimeout(next,150)}).catch(function(){pi++;setTimeout(next,150)});
+    }
+    statusEl.textContent="Loading overnight routes...";next();
+}
+
+var togSt={};
+function buildLeg(days){
+    var el=document.getElementById("legend");el.innerHTML="<div class='lg-t'>Schedule ("+days.length+" days)</div>";togSt={};
+    days.forEach(function(day,di){
+        var col=colors[di%colors.length],cnt=day.stores.length;
+        var row=document.createElement("div");row.className="lg-r";row.setAttribute("data-di",di);
+        row.innerHTML="<span class='lg-d' style='background:"+col+"'></span>"+day.label+"<span class='lg-c'>"+cnt+"</span>";
+        el.appendChild(row);togSt[di]=true;
+    });
+    el.onclick=function(e){
+        var row=e.target.closest(".lg-r");if(!row)return;
+        var di=parseInt(row.getAttribute("data-di"));if(isNaN(di))return;
+        togSt[di]=!togSt[di];
+        if(curDays[di])curDays[di].stores.forEach(function(st){var m=mkrs[st.s[0]];if(m){if(togSt[di])m.mk.setStyle({opacity:1,fillOpacity:comp[st.s[0]]?0.4:0.9});else m.mk.setStyle({opacity:0.1,fillOpacity:0.1})}});
+        if(routeLayers[di]&&routeLayers[di].setStyle)routeLayers[di].setStyle({opacity:togSt[di]?0.7:0.05});
+        row.classList.toggle("off");
+    };
+}
+
+function doRecalc(startDate,startMin,fromLat,fromLon){
+    statusEl.style.display="block";statusEl.textContent="Calculating...";document.getElementById("xbtn").style.display="none";
+    var remaining=allStores.filter(function(s){return !comp[s[0]]});
+    if(remaining.length===0){statusEl.textContent="All locations completed!";setTimeout(function(){statusEl.style.display="none"},2000);curDays=[];clearRoutes();buildLeg([]);return}
+    var hasGPS=false,points;
+    if(fromLat!==null&&fromLon!==null){hasGPS=true;points=[[fromLon,fromLat]];remaining.forEach(function(s){points.push([s[4],s[3]])})}
+    else points=remaining.map(function(s){return[s[4],s[3]]});
+    getLegs(points,function(legs){var days=cutDays(remaining,legs,startDate,startMin,hasGPS);statusEl.textContent="Drawing routes...";drawDays(days)});
+}
+
+document.getElementById("rbtn").addEventListener("click",function(){
+    // Re-parse from column mapping if fresh upload
+    if(parsedRows.length>0){
+        var ci={sid:parseInt(document.getElementById("cSid").value),addr:parseInt(document.getElementById("cAddr").value),city:parseInt(document.getElementById("cCity").value),lat:parseInt(document.getElementById("cLat").value),lon:parseInt(document.getElementById("cLon").value)};
+        if(ci.sid<0||ci.lat<0||ci.lon<0){alert("Map Store ID, Latitude, and Longitude columns");return}
+        allStores=[];
+        parsedRows.forEach(function(r){
+            var lat=parseFloat(r[ci.lat]),lon=parseFloat(r[ci.lon]);
+            if(isNaN(lat)||isNaN(lon)||lat===0||lon===0)return;
+            var sid=String(r[ci.sid]===null||r[ci.sid]===undefined?"":r[ci.sid]).trim();
+            if(!sid)return;
+            allStores.push([sid,ci.addr>=0?String(r[ci.addr]||"").trim():"",ci.city>=0?String(r[ci.city]||"").trim():"",lat,lon]);
+        });
+        if(allStores.length===0){alert("No valid locations. Check column mapping.");return}
+        document.getElementById("finfo").textContent=allStores.length+" locations mapped";
+        placePins();updInfo();
+    }
+    if(allStores.length===0){alert("Upload a file first.");return}
+    var startDate,startMin,fromLat=null,fromLon=null;
+    if(liveMode){
+        if(userLat===null){alert("Waiting for GPS fix.");return}
+        var now=new Date();startDate=now.toISOString().slice(0,10);startMin=now.getHours()*60+now.getMinutes();fromLat=userLat;fromLon=userLon;
+    } else {
+        startDate=document.getElementById("rdate").value;
+        if(!startDate){alert("Pick a start date.");return}
+        var tv=document.getElementById("rtime").value.split(":");startMin=parseInt(tv[0])*60+parseInt(tv[1]);
+    }
+    doRecalc(startDate,startMin,fromLat,fromLon);
+});
+
+// ============================================================
+// SAVE / LOAD ROUTE FILES
+// ============================================================
+document.getElementById("sbtn").addEventListener("click",function(){
+    if(curDays.length===0){alert("No route to save. Route something first.");return}
+    var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
+    if(!name)return;
+    var data={name:name,saved:new Date().toISOString(),allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp};
+    var blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+    var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.replace(/[^a-z0-9_\-]/gi,"_")+".json";a.click();
+});
+
+document.getElementById("ldbtn").addEventListener("click",function(){document.getElementById("routeIn").click()});
+document.getElementById("routeIn").addEventListener("change",function(e){
+    var file=e.target.files[0];if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+        try{
+            var data=JSON.parse(ev.target.result);
+            if(!data.allStores||!data.curDays){alert("Invalid route file.");return}
+            allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};
+            if(data.comp){comp=data.comp;saveC()}
+            placePins();updInfo();restoreView();
+            document.getElementById("finfo").style.display="block";
+            document.getElementById("finfo").textContent=(data.name||"Route")+" loaded - "+allStores.length+" locations";
+            document.getElementById("finfo").style.color="#3B79B4";
+            document.getElementById("rbtn").style.display="block";
+            saveRouteLS();
+        }catch(err){alert("Could not read route file: "+err.message)}
+    };
+    reader.readAsText(file);
+});
+
+function restoreView(){
+    Object.keys(mkrs).forEach(function(sid){var m=mkrs[sid];m.dayIdx=-1;m.idx=0;m.tot=0;m.col="#aaa";if(!comp[sid])m.mk.setStyle({fillColor:"#aaa",color:"#fff",fillOpacity:0.6})});
+    curDays.forEach(function(day,di){var col=colors[di%colors.length];day.stores.forEach(function(st,si){var m=mkrs[st.s[0]];if(m){m.dayIdx=di;m.idx=si;m.tot=day.stores.length;m.col=col;if(!comp[st.s[0]])m.mk.setStyle({fillColor:col,color:"#fff",fillOpacity:0.9})}})});
+    clearRoutes();
+    statusEl.style.display="block";
+    var rdi=0;
+    function ds(){
+        if(rdi>=curDays.length){statusEl.style.display="none";document.getElementById("xbtn").style.display="block";document.getElementById("legend").style.display="block";buildLeg(curDays);return}
+        var day=curDays[rdi],sts=day.stores;
+        if(sts.length<2){routeLayers.push(L.layerGroup().addTo(map));rdi++;setTimeout(ds,50);return}
+        var col=colors[rdi%colors.length];
+        statusEl.textContent="Drawing route "+(rdi+1)+"/"+curDays.length+"...";
+        getDayGeometry(sts,function(geom){
+            if(geom)routeLayers.push(L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map));
+            else routeLayers.push(L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map));
+            rdi++;setTimeout(ds,250);
+        });
+    }
+    ds();
+}
+
+// ============================================================
+// EXPORT XLS
+// ============================================================
+document.getElementById("xbtn").addEventListener("click",function(){
+    var data=[["Date","Store #","Address","City","Arrival","Departure","Drive Min","Road Miles","Status"]];
+    curDays.forEach(function(day){day.stores.forEach(function(st){
+        var sid=st.s[0],ld=legD[sid]||{};
+        data.push([day.label,sid,st.s[1],st.s[2],ld.arrival||"",ld.departure||"",ld.minutes!==undefined?ld.minutes:"",ld.miles!==undefined?ld.miles:"",comp[sid]?"COMPLETED":""]);
+    })});
+    var ws=XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"]=[{wch:12},{wch:10},{wch:35},{wch:20},{wch:12},{wch:12},{wch:10},{wch:10},{wch:12}];
+    var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Route Schedule");
+    XLSX.writeFile(wb,"413_Route_Schedule.xlsx");
+});
+
+// ============================================================
+// LOAD SAVED FROM LOCALSTORAGE
+// ============================================================
+var saved=loadRouteLS();
+if(saved&&saved.allStores&&saved.allStores.length>0&&saved.curDays&&saved.curDays.length>0){
+    allStores=saved.allStores;curDays=saved.curDays;legD=saved.legD||{};ovnD=saved.ovnD||{};
+    placePins();updInfo();
+    document.getElementById("finfo").style.display="block";
+    document.getElementById("finfo").textContent=allStores.length+" locations (saved session)";
+    document.getElementById("finfo").style.color="#3B79B4";
+    document.getElementById("rbtn").style.display="block";
+    restoreView();
+}
+    </script>
+</body>
+</html>
