@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.5.1 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.5.2 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -65,7 +65,7 @@
         .ov{background:#EDF4FB;border:1px solid #B5D4F4;border-radius:4px;padding:5px 8px;margin:6px 0;font-size:0.85em;color:#3B79B4} .ov b{color:#222}
         .cb{display:inline-block;padding:5px 14px;margin-top:8px;border-radius:5px;border:1px solid #3B79B4;font-size:0.85em;font-weight:600;cursor:pointer;background:#fff;color:#3B79B4}
         .cb:hover{background:#EDF4FB} .cb.dn{background:#3D464D;color:#fff;border-color:#3D464D}
-        .lg{position:absolute;top:10px;right:10px;z-index:1000;background:rgba(255,255,255,.93);border-radius:6px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,.12);border:1px solid #ddd;font-size:12px;line-height:1.8;max-height:90vh;overflow-y:auto;display:none}
+        .lg{position:absolute;top:64px;right:10px;z-index:1000;background:rgba(255,255,255,.93);border-radius:6px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,.12);border:1px solid #ddd;font-size:12px;line-height:1.8;max-height:90vh;overflow-y:auto;display:none}
         .lg-t{font-weight:600;font-family:'Poppins',Arial,sans-serif;color:#3B79B4;font-size:13px;margin-bottom:4px;border-bottom:1px solid #e0e0e0;padding-bottom:3px}
         .lg-r{display:flex;align-items:center;gap:7px;cursor:pointer;padding:1px 4px;border-radius:3px}
         .lg-r:hover{background:#f0f0f0} .lg-r.off{opacity:.3}
@@ -74,7 +74,7 @@
         #status{position:absolute;bottom:10px;left:10px;z-index:1000;background:rgba(255,255,255,.9);border-radius:6px;padding:8px 14px;font-size:12px;color:#3B79B4;box-shadow:0 2px 6px rgba(0,0,0,.1);border:1px solid #B5D4F4;display:none}
         #xbtn{position:absolute;bottom:10px;right:10px;z-index:1000;background:#3B79B4;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);display:none}
         #xbtn:hover{background:#2E6A9E}
-        #panel{position:absolute;top:10px;left:10px;z-index:1000;background:rgba(255,255,255,.97);border-radius:8px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.12);border:1px solid #ddd;font-size:12px;width:250px;max-height:92vh;overflow-y:auto}
+        #panel{position:absolute;top:64px;left:10px;z-index:1000;background:rgba(255,255,255,.97);border-radius:8px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.12);border:1px solid #ddd;font-size:12px;width:250px;max-height:92vh;overflow-y:auto}
         #panel .title{font-weight:600;font-family:'Poppins',Arial,sans-serif;color:#3B79B4;font-size:14px;margin-bottom:10px;border-bottom:1px solid #e0e0e0;padding-bottom:6px}
         #panel label{display:block;font-weight:600;color:#3B79B4;margin:8px 0 3px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
         #panel input,#panel select{width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;font-family:'Poppins',Arial,sans-serif;font-weight:400}
@@ -99,9 +99,9 @@
             .leaflet-bottom.leaflet-right .leaflet-control-zoom{margin-bottom:60px;margin-right:10px}
 
         /* Panel/legend toggle buttons */
-        #panelToggle,#legendToggle{position:absolute;z-index:1100;background:#3B79B4;color:#fff;border:none;border-radius:8px;width:44px;height:44px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:none;align-items:center;justify-content:center}
+        #panelToggle,#legendToggle{position:absolute;z-index:1100;background:#3B79B4;color:#fff;border:none;border-radius:8px;width:44px;height:44px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center}
         #panelToggle{top:10px;left:10px}
-        #legendToggle{top:10px;right:10px}
+        #legendToggle{top:10px;right:118px}
         #panel.collapsed,#legend.collapsed{display:none!important}
         .closeX{display:none;position:absolute;top:8px;right:10px;font-size:22px;color:#999;cursor:pointer;line-height:1;background:none;border:none;padding:4px}
 
@@ -122,7 +122,7 @@
             .leaflet-bottom.leaflet-right .leaflet-control-zoom{margin-bottom:70px}
         }
 
-        #settingsToggle{position:absolute;top:10px;right:64px;z-index:1100;background:#3D464D;color:#fff;border:none;border-radius:8px;width:44px;height:44px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center}
+        #settingsToggle{position:absolute;top:10px;right:64px;z-index:1300;background:#3D464D;color:#fff;border:none;border-radius:8px;width:44px;height:44px;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center}
         #settingsDrawer{position:absolute;top:0;right:0;height:100vh;width:300px;max-width:85vw;background:#fff;z-index:2000;box-shadow:-2px 0 16px rgba(0,0,0,.2);padding:20px;box-sizing:border-box;transform:translateX(100%);transition:transform .25s ease;font-family:'Poppins',Arial,sans-serif}
         #settingsDrawer.open{transform:translateX(0)}
 
@@ -230,7 +230,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.5.1";
+var APP_VERSION="v1.5.2";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     document.getElementById("verBadge").textContent=APP_VERSION;
@@ -266,9 +266,15 @@ document.getElementById("panelToggle").addEventListener("click",function(){
     else{panelEl.style.display="block";panelEl.classList.remove("collapsed");legendPanel.classList.remove("shown")}
 });
 document.getElementById("legendToggle").addEventListener("click",function(){
-    var shown=legendPanel.classList.contains("shown");
-    if(shown){legendPanel.classList.remove("shown")}
-    else{legendPanel.classList.add("shown");panelEl.style.display="none"}
+    var mob=window.matchMedia(MOBILE_Q).matches;
+    if(mob){
+        var shown=legendPanel.classList.contains("shown");
+        if(shown){legendPanel.classList.remove("shown")}
+        else{legendPanel.classList.add("shown");panelEl.style.display="none"}
+    } else {
+        // desktop: toggle visibility directly
+        legendPanel.style.display=(legendPanel.style.display==="none")?"block":"none";
+    }
 });
 document.getElementById("panelClose").addEventListener("click",function(){panelEl.style.display="none"});
 document.getElementById("legendClose").addEventListener("click",function(){legendPanel.classList.remove("shown")});
@@ -1042,19 +1048,16 @@ function redrawFromCurDays(callback){
 
 // Back bar UI when in week focus
 function showBackBar(){
-    var bar=document.getElementById("backBar");
-    if(!bar){
-        bar=document.createElement("div");
-        bar.id="backBar";
-        bar.style.cssText="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1200;background:#2E7D7B;color:#fff;padding:8px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:'Poppins',Arial,sans-serif;display:flex;align-items:center;gap:10px";
-        document.body.appendChild(bar);
-        bar.addEventListener("click",function(e){if(e.target.id!=="wkSaveBtn")exitWeek()});
-    }
-    bar.innerHTML="&#8592; Full Route &nbsp;|&nbsp; "+focusWeekMeta.label+" <button id='wkSaveBtn' style='background:#fff;color:#2E7D7B;border:none;border-radius:5px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-left:6px'>Save Week</button>";
-    bar.style.display="flex";
+    var old=document.getElementById("backBar");if(old)old.parentNode.removeChild(old);
+    var bar=document.createElement("div");
+    bar.id="backBar";
+    bar.style.cssText="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1400;background:#2E7D7B;color:#fff;padding:8px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.2);font-size:13px;font-weight:600;font-family:'Poppins',Arial,sans-serif;display:flex;align-items:center;gap:10px";
+    bar.innerHTML="<span id='wkBackBtn' style='cursor:pointer'>&#8592; Full Route</span> <span style='opacity:.6'>|</span> <span>"+focusWeekMeta.label+"</span> <button id='wkSaveBtn' style='background:#fff;color:#2E7D7B;border:none;border-radius:5px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-left:6px'>Save Week</button>";
+    document.body.appendChild(bar);
+    document.getElementById("wkBackBtn").addEventListener("click",function(){exitWeek()});
     document.getElementById("wkSaveBtn").addEventListener("click",function(ev){ev.stopPropagation();saveWeekToCloud()});
 }
-function hideBackBar(){var bar=document.getElementById("backBar");if(bar)bar.style.display="none"}
+function hideBackBar(){var bar=document.getElementById("backBar");if(bar)bar.parentNode.removeChild(bar)}
 
 
 // ============================================================
@@ -1123,19 +1126,16 @@ function exitTrip(){
     redrawFromCurDays(function(){buildLeg(curDays);updInfo();hideTripBar()});
 }
 function showTripBar(){
-    var bar=document.getElementById("tripBar");
-    if(!bar){
-        bar=document.createElement("div");
-        bar.id="tripBar";
-        bar.style.cssText="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1200;background:#2E7D7B;color:#fff;padding:8px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:'Poppins',Arial,sans-serif;display:flex;align-items:center;gap:10px";
-        document.body.appendChild(bar);
-        bar.addEventListener("click",function(e){if(e.target.id!=="tripSaveBtn")exitTrip()});
-    }
-    bar.innerHTML="&#8592; Full Route &nbsp;|&nbsp; "+focusTripMeta.label+" <button id='tripSaveBtn' style='background:#fff;color:#2E7D7B;border:none;border-radius:5px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-left:6px'>Save Trip</button>";
-    bar.style.display="flex";
+    var old=document.getElementById("tripBar");if(old)old.parentNode.removeChild(old);
+    var bar=document.createElement("div");
+    bar.id="tripBar";
+    bar.style.cssText="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1400;background:#2E7D7B;color:#fff;padding:8px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.2);font-size:13px;font-weight:600;font-family:'Poppins',Arial,sans-serif;display:flex;align-items:center;gap:10px";
+    bar.innerHTML="<span id='tripBackBtn' style='cursor:pointer'>&#8592; Full Route</span> <span style='opacity:.6'>|</span> <span>"+focusTripMeta.label+"</span> <button id='tripSaveBtn' style='background:#fff;color:#2E7D7B;border:none;border-radius:5px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-left:6px'>Save Trip</button>";
+    document.body.appendChild(bar);
+    document.getElementById("tripBackBtn").addEventListener("click",function(){exitTrip()});
     document.getElementById("tripSaveBtn").addEventListener("click",function(ev){ev.stopPropagation();saveTripToCloud()});
 }
-function hideTripBar(){var bar=document.getElementById("tripBar");if(bar)bar.style.display="none"}
+function hideTripBar(){var bar=document.getElementById("tripBar");if(bar)bar.parentNode.removeChild(bar)}
 
 function saveTripToCloud(){
     if(!window.sbReady){alert("Cloud not connected.");return}
