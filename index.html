@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.4.1 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.5.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -212,6 +212,12 @@
         <div class="sep"></div>
         <label>Trips (group weeks, fly round-trip)</label>
         <div id="weekList" style="font-size:11px"></div>
+        <div class="sep"></div>
+        <div id="advToggle" style="font-weight:600;color:#3B79B4;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;user-select:none">&#9656; Advanced: Anchor Stores</div>
+        <div id="advBody" style="display:none;margin-top:8px">
+            <div style="font-size:10px;color:#888;margin-bottom:8px">Force a specific store to be first or last in a trip. You still fly in/out of the suggested airport; the route just starts or ends at your chosen store.</div>
+            <div id="advTripList"></div>
+        </div>
         <button class="abtn" id="tripBtn" style="background:#2E7D7B;color:#fff;display:none">Build Trips</button>
 
         <div class="api-status" id="cloudstat"></div>
@@ -224,7 +230,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.4.1";
+var APP_VERSION="v1.5.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     document.getElementById("verBadge").textContent=APP_VERSION;
@@ -809,6 +815,27 @@ function optimizePath(stores,startLat,startLon,endLat,endLon){
     return order;
 }
 
+function optimizeAnchored(stores,startLat,startLon,endLat,endLon,anchors){
+    anchors=anchors||{};
+    var startSid=anchors.start,endSid=anchors.end;
+    // Pull anchored stores out
+    var startStore=null,endStore=null,mid=[];
+    stores.forEach(function(s){
+        if(startSid&&s[0]===startSid){startStore=s;return}
+        if(endSid&&s[0]===endSid){endStore=s;return}
+        mid.push(s);
+    });
+    // Optimize the middle as an open path from the start anchor (or airport) to the end anchor (or airport)
+    var fromLat=startStore?startStore[3]:startLat, fromLon=startStore?startStore[4]:startLon;
+    var toLat=endStore?endStore[3]:endLat, toLon=endStore?endStore[4]:endLon;
+    var orderedMid=optimizePath(mid,fromLat,fromLon,toLat,toLon);
+    var result=[];
+    if(startStore)result.push(startStore);
+    result=result.concat(orderedMid);
+    if(endStore)result.push(endStore);
+    return result;
+}
+
 function nearestAirportFull(lat,lon){
     var best=null,bd=1e9;
     for(var i=0;i<airports.length;i++){var mi=airDist(lat,lon,airports[i]);if(mi<bd){bd=mi;best=airports[i]}}
@@ -844,6 +871,10 @@ function clearHighlight(){
         });
     });
 }
+function dayMiles(day){
+    var t=0;day.stores.forEach(function(st){if(st.mi)t+=st.mi});
+    return Math.round(t);
+}
 var togSt={};
 function buildLeg(days){
     var el=document.getElementById("legend");el.innerHTML="<div class='lg-t'>Schedule ("+days.length+" days)</div>";togSt={};
@@ -873,7 +904,7 @@ function buildLeg(days){
             }
             var col0=colors[di%colors.length],cnt0=day.stores.length;
             var row0=document.createElement("div");row0.className="lg-r";row0.setAttribute("data-di",di);
-            row0.innerHTML="<span class='lg-d' style='background:"+col0+"'></span>"+day.label+"<span class='lg-c'>"+cnt0+"</span>";
+            row0.innerHTML="<span class='lg-d' style='background:"+col0+"'></span>"+day.label+" <span style='color:#aaa;font-size:10px'>"+dayMiles(day)+"mi</span><span class='lg-c'>"+cnt0+"</span>";
             row0.addEventListener("mouseenter",function(){highlightDay(di)});
             row0.addEventListener("mouseleave",clearHighlight);
             el.appendChild(row0);togSt[di]=true;
@@ -907,7 +938,7 @@ function buildLeg(days){
         }
         var col=colors[di%colors.length],cnt=day.stores.length;
         var row=document.createElement("div");row.className="lg-r";row.setAttribute("data-di",di);
-        row.innerHTML="<span class='lg-d' style='background:"+col+"'></span>"+day.label+"<span class='lg-c'>"+cnt+"</span>";
+        row.innerHTML="<span class='lg-d' style='background:"+col+"'></span>"+day.label+" <span style='color:#aaa;font-size:10px'>"+dayMiles(day)+"mi</span><span class='lg-c'>"+cnt+"</span>";
         row.addEventListener("mouseenter",function(){highlightDay(di)});
         row.addEventListener("mouseleave",clearHighlight);
         el.appendChild(row);togSt[di]=true;
@@ -1121,6 +1152,78 @@ function saveTripToCloud(){
     .catch(function(err){console.error("Trip save:",err);if(btn)btn.textContent="Save Trip";alert("Trip save failed: "+err.message)});
 }
 
+
+// ============================================================
+// ADVANCED: ANCHOR STORES (per-trip start/end)
+// ============================================================
+window.tripAnchors={}; // {tripNum:{start:sid,end:sid}}
+
+document.getElementById("advToggle").addEventListener("click",function(){
+    var body=document.getElementById("advBody");
+    var open=body.style.display!=="none";
+    body.style.display=open?"none":"block";
+    this.innerHTML=(open?"\u25B8":"\u25BE")+" Advanced: Anchor Stores";
+    if(!open)buildAdvList();
+});
+
+function buildAdvList(){
+    var wrap=document.getElementById("advTripList");
+    wrap.innerHTML="";
+    if(curDays.length===0){wrap.innerHTML="<div style='font-size:11px;color:#999'>Route something first.</div>";return}
+    // Determine trip groupings from the Trips dropdowns
+    var sels=document.querySelectorAll(".wkTrip");
+    var groups={};
+    sels.forEach(function(s){var t=s.value,wk=s.getAttribute("data-wk");if(!groups[t])groups[t]=[];groups[t].push(wk)});
+    var tnums=Object.keys(groups).sort(function(a,b){return a-b});
+    tnums.forEach(function(t){
+        // Collect this trip's stores
+        var stores=[];
+        curDays.forEach(function(day){
+            if(groups[t].indexOf(mondayOf(day.date))<0)return;
+            day.stores.forEach(function(st){stores.push(st.s)});
+        });
+        if(stores.length===0)return;
+        var block=document.createElement("div");
+        block.style.cssText="margin:8px 0;padding:8px;background:#fafafa;border-radius:4px;border:1px solid #eee";
+        var head=document.createElement("div");
+        head.style.cssText="font-weight:600;color:#2E7D7B;font-size:11px;margin-bottom:5px";
+        head.textContent="Trip "+t;
+        block.appendChild(head);
+        function mkSel(kind){
+            var lbl=document.createElement("label");
+            lbl.style.cssText="display:block;font-size:10px;color:#888;margin:4px 0 2px;text-transform:none;letter-spacing:0";
+            lbl.textContent=(kind==="start"?"Start at store (first day):":"End at store (last day):");
+            var sel=document.createElement("select");
+            sel.className="advAnchor";
+            sel.setAttribute("data-trip",t);
+            sel.setAttribute("data-kind",kind);
+            sel.style.cssText="width:100%;padding:4px;font-size:11px;border:1px solid #ccc;border-radius:4px";
+            var none=document.createElement("option");none.value="";none.textContent="(auto - nearest to airport)";sel.appendChild(none);
+            stores.forEach(function(s){
+                var o=document.createElement("option");o.value=s[0];
+                o.textContent=s[0]+(s[2]?" - "+s[2]:"");
+                if(window.tripAnchors[t]&&window.tripAnchors[t][kind]===s[0])o.selected=true;
+                sel.appendChild(o);
+            });
+            block.appendChild(lbl);block.appendChild(sel);
+        }
+        mkSel("start");mkSel("end");
+        wrap.appendChild(block);
+    });
+    // rebuild list when trip assignments change
+    document.querySelectorAll(".wkTrip").forEach(function(s){s.addEventListener("change",function(){if(document.getElementById("advBody").style.display!=="none")buildAdvList()})});
+}
+
+function readAnchors(){
+    window.tripAnchors={};
+    document.querySelectorAll(".advAnchor").forEach(function(sel){
+        var t=sel.getAttribute("data-trip"),kind=sel.getAttribute("data-kind"),v=sel.value;
+        if(!v)return;
+        if(!window.tripAnchors[t])window.tripAnchors[t]={};
+        window.tripAnchors[t][kind]=v;
+    });
+}
+
 // ============================================================
 // TRIPS
 // ============================================================
@@ -1186,6 +1289,7 @@ document.getElementById("tripBtn").addEventListener("click",function(){
         if(!groups[t])groups[t]=[];
         groups[t].push(wk);
     });
+    readAnchors();
     // One-way per week -> rolls up to trip (if any week in the trip is checked)
     var wkOneWay={};
     document.querySelectorAll(".owWk").forEach(function(c){wkOneWay[c.getAttribute("data-wk")]=c.checked});
@@ -1207,7 +1311,7 @@ document.getElementById("tripBtn").addEventListener("click",function(){
         });
         if(stores.length===0)return;
         wks.sort();
-        trips.push({tripNum:t,weeks:wks,grouped:wks.length>1,oneWay:!!window.tripOneWay[t],stores:stores});
+        trips.push({tripNum:t,weeks:wks,grouped:wks.length>1,oneWay:!!window.tripOneWay[t],anchors:window.tripAnchors[t]||{},stores:stores});
     });
     if(trips.length===0){alert("No uncompleted stores in any trip.");return}
 
@@ -1265,7 +1369,7 @@ document.getElementById("tripBtn").addEventListener("click",function(){
             var reg=nearestRegional(clat,clon);
             var regNote=(reg&&reg.mi<hub.mi-15)?reg:null;
             statusEl.textContent="Trip "+(ti+1)+": optimizing "+trip.stores.length+" stops...";
-            var ordered=optimizeLoop(trip.stores,hub.lat,hub.lon);
+            var ordered=optimizeAnchored(trip.stores,hub.lat,hub.lon,hub.lat,hub.lon,trip.anchors);
             var points=[[hub.lon,hub.lat]];
             ordered.forEach(function(s){points.push([s[4],s[3]])});
             points.push([hub.lon,hub.lat]);
@@ -1275,7 +1379,7 @@ document.getElementById("tripBtn").addEventListener("click",function(){
             var rough=optimizePath(trip.stores,null,null,null,null);
             var apIn=nearestAirportFull(rough[0][3],rough[0][4]);
             var apOut=nearestAirportFull(rough[rough.length-1][3],rough[rough.length-1][4]);
-            var ordered=optimizePath(trip.stores,apIn.lat,apIn.lon,apOut.lat,apOut.lon);
+            var ordered=optimizeAnchored(trip.stores,apIn.lat,apIn.lon,apOut.lat,apOut.lon,trip.anchors);
             var points=[[apIn.lon,apIn.lat]];
             ordered.forEach(function(s){points.push([s[4],s[3]])});
             points.push([apOut.lon,apOut.lat]);
@@ -1357,7 +1461,7 @@ document.getElementById("sbtn").addEventListener("click",function(){
     if(curDays.length===0){alert("No route to save. Route something first.");return}
     var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
     if(!name)return;
-    var data={name:name,saved:new Date().toISOString(),version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta};
+    var data={name:name,saved:new Date().toISOString(),version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay};
     var blob=new Blob([JSON.stringify(data)],{type:"application/json"});
     var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.replace(/[^a-z0-9_\-]/gi,"_")+".json";a.click();
 });
@@ -1370,7 +1474,7 @@ document.getElementById("routeIn").addEventListener("change",function(e){
         try{
             var data=JSON.parse(ev.target.result);
             if(!data.allStores||!data.curDays){alert("Invalid route file.");return}
-            allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;
+            allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;window.tripAnchors=data.tripAnchors||{};window.tripOneWay=data.tripOneWay||{};
             if(data.comp){comp=data.comp;saveC()}
             clearUploadState();placePins();updInfo();restoreView();
             document.getElementById("finfo").style.display="block";
@@ -1462,7 +1566,7 @@ document.getElementById("csavebtn").addEventListener("click",function(){
     var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
     if(!name)return;
     setCloudStat("Saving...","#888");
-    var payload={version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta};
+    var payload={version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay};
     window.sbSaveRoute(name,payload).then(function(id){
         setCloudStat("Saved to cloud","#4caf50");
         refreshCloudList();
@@ -1480,7 +1584,7 @@ document.getElementById("cloadbtn").addEventListener("click",function(){
     setCloudStat("Loading route...","#888");
     window.sbLoadRoute(id).then(function(data){
         if(!data||!data.allStores||!data.curDays){alert("Invalid cloud route.");return}
-        allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;
+        allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;window.tripAnchors=data.tripAnchors||{};window.tripOneWay=data.tripOneWay||{};
         if(data.comp){comp=data.comp;saveC()}
         clearUploadState();placePins();updInfo();restoreView();saveRouteLS();
         if(data.isWeek&&data.weekMonday){
