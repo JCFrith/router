@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.4.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.4.1 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -179,7 +179,7 @@
         <label>Start Date</label>
         <input type="date" id="rdate">
         <label>Start Time</label>
-        <input type="time" id="rtime" value="07:00">
+        <input type="time" id="rtime" value="09:00">
         <label>Last Arrival By</label>
         <select id="cutoff">
             <option value="960">4:00 PM</option>
@@ -189,7 +189,7 @@
             <option value="1080">6:00 PM</option>
         </select>
         <label>Max Stores Per Week</label>
-        <input type="number" id="maxpw" value="40" min="1" max="200">
+        <input type="number" id="maxpw" value="50" min="1" max="200">
         <button class="abtn" id="lbtn">Use Current Location &amp; Time</button>
         <div class="gps-info" id="ginfo"></div>
         <label style="display:flex;align-items:center;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0;font-weight:400;color:#3D464D;font-size:12px;cursor:pointer"><input type="checkbox" id="preserveOrder" style="width:auto;margin:0"> Preserve file order (skip optimize)</label>
@@ -224,7 +224,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.4.0";
+var APP_VERSION="v1.4.1";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     document.getElementById("verBadge").textContent=APP_VERSION;
@@ -590,7 +590,8 @@ function cutDays(remaining,legs,startDate,startMin,hasGPS){
     var maxWeek=parseInt(document.getElementById("maxpw").value);
     var weekCounts={};
     var legOff=hasGPS?1:0;
-    var weekMode=!!window.weekFocusMode; // true when editing a single week - allow weekend overflow, no weekly cap
+    var weekMode=!!window.weekFocusMode; // single-week edit: weekend overflow, no weekly cap
+    var tripMode=!!window.tripBuildMode; // trip build: weekdays only, no weekly cap
 
     function wk(d){return mondayOf(d)}
     function advanceDay(){
@@ -603,7 +604,7 @@ function cutDays(remaining,legs,startDate,startMin,hasGPS){
     }
 
     for(var i=0;i<remaining.length;i++){
-        if(!weekMode){
+        if(!weekMode&&!tripMode){
             var wkKey=wk(curDate);
             if((weekCounts[wkKey]||0)>=maxWeek){advanceWeek();wkKey=wk(curDate)}
         }
@@ -614,7 +615,7 @@ function cutDays(remaining,legs,startDate,startMin,hasGPS){
         var arrival=clock+dm;
         if(arrival>maxArrival&&curStores.length>0){
             advanceDay();
-            if(!weekMode){
+            if(!weekMode&&!tripMode){
                 var wkKey2=wk(curDate);
                 if((weekCounts[wkKey2]||0)>=maxWeek){advanceWeek()}
             }
@@ -622,7 +623,7 @@ function cutDays(remaining,legs,startDate,startMin,hasGPS){
         }
 
         curStores.push({s:remaining[i],arrival:arrival,driveMin:dm,mi:dmi});
-        if(!weekMode){var wkKey3=wk(curDate);weekCounts[wkKey3]=(weekCounts[wkKey3]||0)+1}
+        if(!weekMode&&!tripMode){var wkKey3=wk(curDate);weekCounts[wkKey3]=(weekCounts[wkKey3]||0)+1}
         clock=arrival+30;
     }
     if(curStores.length>0)days.push({date:curDate,label:dateLbl(curDate),stores:curStores.slice()});
@@ -1129,23 +1130,30 @@ function updateTripUI(days){
     var wl=document.getElementById("weekList");
     var tb=document.getElementById("tripBtn");
     wl.innerHTML="";
+    var owWrap=document.getElementById("owWrap");
+    if(owWrap)owWrap.innerHTML="";
     if(!days||days.length===0||focusWeek){tb.style.display="none";return}
     var weeks=[];
     days.forEach(function(d){var wk=mondayOf(d.date);if(weeks.indexOf(wk)<0)weeks.push(wk)});
     weeks.sort();
-    // If trips already built, derive each week's current trip number
     var wkTrip={};
     if(window.tripsMeta){
         days.forEach(function(d){
             if(d.tripIdx!==undefined){var wk=mondayOf(d.date);if(wkTrip[wk]===undefined)wkTrip[wk]=d.tripIdx+1}
         });
     }
+    // Column header row
+    var head=document.createElement("div");
+    head.style.cssText="display:flex;align-items:center;gap:6px;margin:2px 0 4px;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px";
+    head.innerHTML="<span style='flex:1'></span><span style='width:70px;text-align:center'>Trip</span><span style='width:56px;text-align:center'>One-way</span>";
+    wl.appendChild(head);
+
     weeks.forEach(function(wk,i){
         var row=document.createElement("div");
         row.style.cssText="display:flex;align-items:center;gap:6px;margin:3px 0";
         var lbl=document.createElement("span");
         lbl.textContent="Week of "+dateLbl(wk).slice(4);
-        lbl.style.cssText="flex:1;color:#3D464D";
+        lbl.style.cssText="flex:1;color:#3D464D;font-size:11px";
         var sel=document.createElement("select");
         sel.className="wkTrip";
         sel.setAttribute("data-wk",wk);
@@ -1156,34 +1164,14 @@ function updateTripUI(days){
             if(t===cur)o.selected=true;
             sel.appendChild(o);
         }
-        row.appendChild(lbl);row.appendChild(sel);
+        // One-way checkbox per week row (keyed by week; applied to that week's trip)
+        var owBox=document.createElement("div");
+        owBox.style.cssText="width:56px;display:flex;justify-content:center";
+        var prevOw=window.tripOneWay&&window.tripOneWay[cur];
+        owBox.innerHTML="<input type='checkbox' class='owWk' data-wk='"+wk+"' style='width:auto;margin:0' "+(prevOw?"checked":"")+">";
+        row.appendChild(lbl);row.appendChild(sel);row.appendChild(owBox);
         wl.appendChild(row);
     });
-    // Per-trip one-way toggles
-    var owWrap=document.getElementById("owWrap");
-    if(!owWrap){
-        owWrap=document.createElement("div");owWrap.id="owWrap";
-        wl.parentNode.insertBefore(owWrap,tb);
-    }
-    function renderOw(){
-        var picks={};
-        document.querySelectorAll(".wkTrip").forEach(function(s){picks[s.value]=true});
-        var tnums=Object.keys(picks).sort(function(a,b){return a-b});
-        owWrap.innerHTML="";
-        var hdr=document.createElement("div");
-        hdr.style.cssText="font-size:10px;color:#888;margin:6px 0 2px;text-transform:uppercase;letter-spacing:.5px";
-        hdr.textContent="Trip type";
-        owWrap.appendChild(hdr);
-        tnums.forEach(function(t){
-            var prev=window.tripOneWay&&window.tripOneWay[t];
-            var r=document.createElement("label");
-            r.style.cssText="display:flex;align-items:center;gap:6px;margin:2px 0;font-size:11px;color:#3D464D;text-transform:none;letter-spacing:0;font-weight:400;cursor:pointer";
-            r.innerHTML="<input type='checkbox' class='owTrip' data-trip='"+t+"' style='width:auto;margin:0' "+(prev?"checked":"")+"> Trip "+t+" one-way";
-            owWrap.appendChild(r);
-        });
-    }
-    renderOw();
-    document.querySelectorAll(".wkTrip").forEach(function(s){s.addEventListener("change",renderOw)});
     tb.style.display="block";
     tb.textContent=window.tripsMeta?"Rebuild Trips":"Build Trips";
 }
@@ -1198,9 +1186,14 @@ document.getElementById("tripBtn").addEventListener("click",function(){
         if(!groups[t])groups[t]=[];
         groups[t].push(wk);
     });
-    // Per-trip one-way flags
+    // One-way per week -> rolls up to trip (if any week in the trip is checked)
+    var wkOneWay={};
+    document.querySelectorAll(".owWk").forEach(function(c){wkOneWay[c.getAttribute("data-wk")]=c.checked});
     window.tripOneWay={};
-    document.querySelectorAll(".owTrip").forEach(function(c){window.tripOneWay[c.getAttribute("data-trip")]=c.checked});
+    Object.keys(groups).forEach(function(t){
+        var any=false;groups[t].forEach(function(wk){if(wkOneWay[wk])any=true});
+        window.tripOneWay[t]=any;
+    });
 
     // Trip number defines sequence order on the calendar
     var tripNums=Object.keys(groups).sort(function(a,b){return a-b});
@@ -1249,10 +1242,10 @@ document.getElementById("tripBtn").addEventListener("click",function(){
 
         function finishTrip(ordered,legs,apIn,apOut,regNote,isOneWay){
             var retLeg=legs.length>=ordered.length+1?legs[legs.length-1]:{mi:0,mins:0};
-            // In grouped trips, allow continuous weekday flow (no Monday reset); still no weekly cap within a trip.
-            window.weekFocusMode=true; // reuse: weekday advance, weekend overflow, no weekly cap
-            var tripDays=cutDays(ordered,legs,tripStartDate,7*60,true);
-            window.weekFocusMode=false;
+            // Within a trip: continuous WEEKDAYS only (skip weekends), no weekly cap.
+            window.tripBuildMode=true;
+            var tripDays=cutDays(ordered,legs,tripStartDate,9*60,true);
+            window.tripBuildMode=false;
             var tIdx=meta.length;
             tripDays.forEach(function(d){d.tripIdx=tIdx});
             allDays=allDays.concat(tripDays);
