@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.5.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.5.1 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -230,7 +230,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.5.0";
+var APP_VERSION="v1.5.1";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     document.getElementById("verBadge").textContent=APP_VERSION;
@@ -1248,31 +1248,36 @@ function updateTripUI(days){
     // Column header row
     var head=document.createElement("div");
     head.style.cssText="display:flex;align-items:center;gap:6px;margin:2px 0 4px;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px";
-    head.innerHTML="<span style='flex:1'></span><span style='width:70px;text-align:center'>Trip</span><span style='width:56px;text-align:center'>One-way</span>";
+    head.innerHTML="<span style='width:32px'></span><span style='flex:1;text-align:center'>Trip</span><span style='width:50px;text-align:center'>One-way</span><span style='width:40px;text-align:center'>Rest</span>";
     wl.appendChild(head);
 
     weeks.forEach(function(wk,i){
         var row=document.createElement("div");
         row.style.cssText="display:flex;align-items:center;gap:6px;margin:3px 0";
         var lbl=document.createElement("span");
-        lbl.textContent="Week of "+dateLbl(wk).slice(4);
-        lbl.style.cssText="flex:1;color:#3D464D;font-size:11px";
+        lbl.textContent=(i+1);
+        lbl.style.cssText="width:32px;color:#999;font-size:11px";
         var sel=document.createElement("select");
         sel.className="wkTrip";
         sel.setAttribute("data-wk",wk);
-        sel.style.cssText="width:70px;padding:3px 4px;font-size:11px;border:1px solid #ccc;border-radius:4px";
+        sel.style.cssText="flex:1;padding:3px 4px;font-size:11px;border:1px solid #ccc;border-radius:4px";
         var cur=(wkTrip[wk]!==undefined)?wkTrip[wk]:(i+1);
         for(var t=1;t<=weeks.length;t++){
             var o=document.createElement("option");o.value=t;o.textContent="Trip "+t;
             if(t===cur)o.selected=true;
             sel.appendChild(o);
         }
-        // One-way checkbox per week row (keyed by week; applied to that week's trip)
+        // One-way checkbox
         var owBox=document.createElement("div");
-        owBox.style.cssText="width:56px;display:flex;justify-content:center";
+        owBox.style.cssText="width:50px;display:flex;justify-content:center";
         var prevOw=window.tripOneWay&&window.tripOneWay[cur];
         owBox.innerHTML="<input type='checkbox' class='owWk' data-wk='"+wk+"' style='width:auto;margin:0' "+(prevOw?"checked":"")+">";
-        row.appendChild(lbl);row.appendChild(sel);row.appendChild(owBox);
+        // Rest checkbox
+        var restBox=document.createElement("div");
+        restBox.style.cssText="width:40px;display:flex;justify-content:center";
+        var prevRest=window.tripRest&&window.tripRest[wk];
+        restBox.innerHTML="<input type='checkbox' class='restWk' data-wk='"+wk+"' style='width:auto;margin:0' "+(prevRest?"checked":"")+">";
+        row.appendChild(lbl);row.appendChild(sel);row.appendChild(owBox);row.appendChild(restBox);
         wl.appendChild(row);
     });
     tb.style.display="block";
@@ -1290,13 +1295,19 @@ document.getElementById("tripBtn").addEventListener("click",function(){
         groups[t].push(wk);
     });
     readAnchors();
+    // Rest weeks: after the trip containing this week, insert a rest (skip) week
+    window.tripRest={};
+    document.querySelectorAll(".restWk").forEach(function(c){window.tripRest[c.getAttribute("data-wk")]=c.checked});
     // One-way per week -> rolls up to trip (if any week in the trip is checked)
     var wkOneWay={};
     document.querySelectorAll(".owWk").forEach(function(c){wkOneWay[c.getAttribute("data-wk")]=c.checked});
     window.tripOneWay={};
+    var tripRestAfter={};
     Object.keys(groups).forEach(function(t){
         var any=false;groups[t].forEach(function(wk){if(wkOneWay[wk])any=true});
         window.tripOneWay[t]=any;
+        var rest=false;groups[t].forEach(function(wk){if(window.tripRest[wk])rest=true});
+        tripRestAfter[t]=rest;
     });
 
     // Trip number defines sequence order on the calendar
@@ -1311,7 +1322,7 @@ document.getElementById("tripBtn").addEventListener("click",function(){
         });
         if(stores.length===0)return;
         wks.sort();
-        trips.push({tripNum:t,weeks:wks,grouped:wks.length>1,oneWay:!!window.tripOneWay[t],anchors:window.tripAnchors[t]||{},stores:stores});
+        trips.push({tripNum:t,weeks:wks,grouped:wks.length>1,oneWay:!!window.tripOneWay[t],restAfter:!!tripRestAfter[t],anchors:window.tripAnchors[t]||{},stores:stores});
     });
     if(trips.length===0){alert("No uncompleted stores in any trip.");return}
 
@@ -1356,9 +1367,12 @@ document.getElementById("tripBtn").addEventListener("click",function(){
             // Compute next trip start
             var lastDay=tripDays[tripDays.length-1].date;
             if(ti+1<trips.length){
-                // If NEXT trip is grouped-continuation of same... no: each trip is independent.
-                // Rule: next trip starts next Monday (clean boundary between separate trips)
                 nextTripStart=nextMonday(lastDay);
+                // Rest week: push the next trip an additional week to the right
+                if(trip.restAfter){
+                    var d=new Date(nextTripStart+"T12:00:00");d.setDate(d.getDate()+7);
+                    nextTripStart=d.toISOString().slice(0,10);
+                }
             }
             meta.push({label:"Trip "+(tIdx+1),tripNum:trip.tripNum,oneWay:isOneWay,airport:apIn,airportOut:apOut||apIn,regional:regNote,storeCount:ordered.length,startDate:tripStartDate,inLeg:legs.length>0?legs[0]:{mi:0,mins:0},retLeg:retLeg,firstSid:ordered[0][0],lastSid:ordered[ordered.length-1][0]});
             ti++;setTimeout(nextTrip,300);
@@ -1461,7 +1475,7 @@ document.getElementById("sbtn").addEventListener("click",function(){
     if(curDays.length===0){alert("No route to save. Route something first.");return}
     var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
     if(!name)return;
-    var data={name:name,saved:new Date().toISOString(),version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay};
+    var data={name:name,saved:new Date().toISOString(),version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay,tripRest:window.tripRest};
     var blob=new Blob([JSON.stringify(data)],{type:"application/json"});
     var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.replace(/[^a-z0-9_\-]/gi,"_")+".json";a.click();
 });
@@ -1474,7 +1488,7 @@ document.getElementById("routeIn").addEventListener("change",function(e){
         try{
             var data=JSON.parse(ev.target.result);
             if(!data.allStores||!data.curDays){alert("Invalid route file.");return}
-            allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;window.tripAnchors=data.tripAnchors||{};window.tripOneWay=data.tripOneWay||{};
+            allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;window.tripAnchors=data.tripAnchors||{};window.tripOneWay=data.tripOneWay||{};window.tripRest=data.tripRest||{};
             if(data.comp){comp=data.comp;saveC()}
             clearUploadState();placePins();updInfo();restoreView();
             document.getElementById("finfo").style.display="block";
@@ -1566,7 +1580,7 @@ document.getElementById("csavebtn").addEventListener("click",function(){
     var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
     if(!name)return;
     setCloudStat("Saving...","#888");
-    var payload={version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay};
+    var payload={version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay,tripRest:window.tripRest};
     window.sbSaveRoute(name,payload).then(function(id){
         setCloudStat("Saved to cloud","#4caf50");
         refreshCloudList();
@@ -1584,7 +1598,7 @@ document.getElementById("cloadbtn").addEventListener("click",function(){
     setCloudStat("Loading route...","#888");
     window.sbLoadRoute(id).then(function(data){
         if(!data||!data.allStores||!data.curDays){alert("Invalid cloud route.");return}
-        allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;window.tripAnchors=data.tripAnchors||{};window.tripOneWay=data.tripOneWay||{};
+        allStores=data.allStores;curDays=data.curDays;legD=data.legD||{};ovnD=data.ovnD||{};window.tripsMeta=data.tripsMeta||null;window.tripAnchors=data.tripAnchors||{};window.tripOneWay=data.tripOneWay||{};window.tripRest=data.tripRest||{};
         if(data.comp){comp=data.comp;saveC()}
         clearUploadState();placePins();updInfo();restoreView();saveRouteLS();
         if(data.isWeek&&data.weekMonday){
