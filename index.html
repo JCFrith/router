@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.3.2 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.4.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -212,7 +212,6 @@
         <div class="sep"></div>
         <label>Trips (group weeks, fly round-trip)</label>
         <div id="weekList" style="font-size:11px"></div>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;text-transform:none;letter-spacing:0;font-weight:400;color:#3D464D;font-size:12px;cursor:pointer"><input type="checkbox" id="oneWayTrip" style="width:auto;margin:0"> One-way trip (fly in/out different airports)</label>
         <button class="abtn" id="tripBtn" style="background:#2E7D7B;color:#fff;display:none">Build Trips</button>
 
         <div class="api-status" id="cloudstat"></div>
@@ -225,7 +224,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.3.2";
+var APP_VERSION="v1.4.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     document.getElementById("verBadge").textContent=APP_VERSION;
@@ -858,9 +857,9 @@ function buildLeg(days){
                     thdr.style.cssText="margin:8px 0 3px;padding:6px 8px;background:#2E7D7B;color:#fff;border-radius:4px;font-size:11px;line-height:1.5";
                     var regTxt=tm.regional?"<br><span style='opacity:.85'>Regional option: "+tm.regional.code+" ("+tm.regional.name+", "+tm.regional.mi+"mi vs "+tm.airport.mi+"mi)</span>":"";
                     var apTxt;
-                    if(tm.oneWay){apTxt="<b>"+tm.label+" - In "+tm.airport.code+" / Out "+tm.airportOut.code+"</b><br>"+tm.storeCount+" stores - one way";}
-                    else{apTxt="<b>"+tm.label+" - Fly "+tm.airport.code+"</b> ("+tm.airport.name+")<br>"+tm.storeCount+" stores - round trip"+regTxt;}
-                    thdr.innerHTML=apTxt;
+                    var startTxt=tm.startDate?" - starts "+dateLbl(tm.startDate).slice(4):"";
+                    if(tm.oneWay){apTxt="<b>"+tm.label+" - In "+tm.airport.code+" / Out "+tm.airportOut.code+"</b>"+startTxt+"<br>"+tm.storeCount+" stores - one way";}
+                    else{apTxt="<b>"+tm.label+" - Fly "+tm.airport.code+"</b> ("+tm.airport.name+")"+startTxt+"<br>"+tm.storeCount+" stores - round trip"+regTxt;}
                     thdr.style.cursor="pointer";
                     thdr.innerHTML=apTxt+" <span style='float:right'>&#9656;</span>";
                     (function(ti2){
@@ -1150,7 +1149,7 @@ function updateTripUI(days){
         var sel=document.createElement("select");
         sel.className="wkTrip";
         sel.setAttribute("data-wk",wk);
-        sel.style.cssText="width:80px;padding:3px 4px;font-size:11px;border:1px solid #ccc;border-radius:4px";
+        sel.style.cssText="width:70px;padding:3px 4px;font-size:11px;border:1px solid #ccc;border-radius:4px";
         var cur=(wkTrip[wk]!==undefined)?wkTrip[wk]:(i+1);
         for(var t=1;t<=weeks.length;t++){
             var o=document.createElement("option");o.value=t;o.textContent="Trip "+t;
@@ -1160,6 +1159,31 @@ function updateTripUI(days){
         row.appendChild(lbl);row.appendChild(sel);
         wl.appendChild(row);
     });
+    // Per-trip one-way toggles
+    var owWrap=document.getElementById("owWrap");
+    if(!owWrap){
+        owWrap=document.createElement("div");owWrap.id="owWrap";
+        wl.parentNode.insertBefore(owWrap,tb);
+    }
+    function renderOw(){
+        var picks={};
+        document.querySelectorAll(".wkTrip").forEach(function(s){picks[s.value]=true});
+        var tnums=Object.keys(picks).sort(function(a,b){return a-b});
+        owWrap.innerHTML="";
+        var hdr=document.createElement("div");
+        hdr.style.cssText="font-size:10px;color:#888;margin:6px 0 2px;text-transform:uppercase;letter-spacing:.5px";
+        hdr.textContent="Trip type";
+        owWrap.appendChild(hdr);
+        tnums.forEach(function(t){
+            var prev=window.tripOneWay&&window.tripOneWay[t];
+            var r=document.createElement("label");
+            r.style.cssText="display:flex;align-items:center;gap:6px;margin:2px 0;font-size:11px;color:#3D464D;text-transform:none;letter-spacing:0;font-weight:400;cursor:pointer";
+            r.innerHTML="<input type='checkbox' class='owTrip' data-trip='"+t+"' style='width:auto;margin:0' "+(prev?"checked":"")+"> Trip "+t+" one-way";
+            owWrap.appendChild(r);
+        });
+    }
+    renderOw();
+    document.querySelectorAll(".wkTrip").forEach(function(s){s.addEventListener("change",renderOw)});
     tb.style.display="block";
     tb.textContent=window.tripsMeta?"Rebuild Trips":"Build Trips";
 }
@@ -1174,6 +1198,11 @@ document.getElementById("tripBtn").addEventListener("click",function(){
         if(!groups[t])groups[t]=[];
         groups[t].push(wk);
     });
+    // Per-trip one-way flags
+    window.tripOneWay={};
+    document.querySelectorAll(".owTrip").forEach(function(c){window.tripOneWay[c.getAttribute("data-trip")]=c.checked});
+
+    // Trip number defines sequence order on the calendar
     var tripNums=Object.keys(groups).sort(function(a,b){return a-b});
     var trips=[];
     tripNums.forEach(function(t){
@@ -1185,9 +1214,12 @@ document.getElementById("tripBtn").addEventListener("click",function(){
         });
         if(stores.length===0)return;
         wks.sort();
-        trips.push({weeks:wks,startDate:wks[0],stores:stores});
+        trips.push({tripNum:t,weeks:wks,grouped:wks.length>1,oneWay:!!window.tripOneWay[t],stores:stores});
     });
     if(trips.length===0){alert("No uncompleted stores in any trip.");return}
+
+    // Base start date from the Start Date field (fallback: earliest week)
+    var baseStart=document.getElementById("rdate").value||trips[0].weeks[0];
 
     routing=true;
     var tb=document.getElementById("tripBtn");tb.disabled=true;tb.style.opacity="0.5";
@@ -1197,6 +1229,7 @@ document.getElementById("tripBtn").addEventListener("click",function(){
     var allDays=[];
     var meta=[];
     var ti=0;
+    var nextTripStart=mondayOf(baseStart); // first trip starts on the Monday of the base start date
 
     function nextTrip(){
         if(ti>=trips.length){
@@ -1208,14 +1241,33 @@ document.getElementById("tripBtn").addEventListener("click",function(){
             return;
         }
         var trip=trips[ti];
-        var oneWay=document.getElementById("oneWayTrip").checked;
+        var tripStartDate=nextTripStart;
         statusEl.textContent="Trip "+(ti+1)+": finding airport...";
         var clat=0,clon=0;
         trip.stores.forEach(function(s){clat+=s[3];clon+=s[4]});
         clat/=trip.stores.length;clon/=trip.stores.length;
 
-        if(!oneWay){
-            // ROUND TRIP: one centroid hub, optimized loop
+        function finishTrip(ordered,legs,apIn,apOut,regNote,isOneWay){
+            var retLeg=legs.length>=ordered.length+1?legs[legs.length-1]:{mi:0,mins:0};
+            // In grouped trips, allow continuous weekday flow (no Monday reset); still no weekly cap within a trip.
+            window.weekFocusMode=true; // reuse: weekday advance, weekend overflow, no weekly cap
+            var tripDays=cutDays(ordered,legs,tripStartDate,7*60,true);
+            window.weekFocusMode=false;
+            var tIdx=meta.length;
+            tripDays.forEach(function(d){d.tripIdx=tIdx});
+            allDays=allDays.concat(tripDays);
+            // Compute next trip start
+            var lastDay=tripDays[tripDays.length-1].date;
+            if(ti+1<trips.length){
+                // If NEXT trip is grouped-continuation of same... no: each trip is independent.
+                // Rule: next trip starts next Monday (clean boundary between separate trips)
+                nextTripStart=nextMonday(lastDay);
+            }
+            meta.push({label:"Trip "+(tIdx+1),tripNum:trip.tripNum,oneWay:isOneWay,airport:apIn,airportOut:apOut||apIn,regional:regNote,storeCount:ordered.length,startDate:tripStartDate,inLeg:legs.length>0?legs[0]:{mi:0,mins:0},retLeg:retLeg,firstSid:ordered[0][0],lastSid:ordered[ordered.length-1][0]});
+            ti++;setTimeout(nextTrip,300);
+        }
+
+        if(!trip.oneWay){
             var hub=nearestHub(clat,clon);
             var reg=nearestRegional(clat,clon);
             var regNote=(reg&&reg.mi<hub.mi-15)?reg:null;
@@ -1224,36 +1276,17 @@ document.getElementById("tripBtn").addEventListener("click",function(){
             var points=[[hub.lon,hub.lat]];
             ordered.forEach(function(s){points.push([s[4],s[3]])});
             points.push([hub.lon,hub.lat]);
-            getLegs(points,function(legs){
-                var retLeg=legs.length>=ordered.length+1?legs[legs.length-1]:{mi:0,mins:0};
-                var tripDays=cutDays(ordered,legs,trip.startDate,7*60,true);
-                var tIdx=meta.length;
-                tripDays.forEach(function(d){d.tripIdx=tIdx});
-                allDays=allDays.concat(tripDays);
-                meta.push({label:"Trip "+(tIdx+1),oneWay:false,airport:hub,airportOut:hub,regional:regNote,storeCount:ordered.length,startDate:trip.startDate,inLeg:legs.length>0?legs[0]:{mi:0,mins:0},retLeg:retLeg,firstSid:ordered[0][0],lastSid:ordered[ordered.length-1][0]});
-                ti++;setTimeout(nextTrip,300);
-            });
+            getLegs(points,function(legs){finishTrip(ordered,legs,hub,hub,regNote,false)});
         } else {
-            // ONE WAY: optimize open path, then pick nearest airport to each end
             statusEl.textContent="Trip "+(ti+1)+": optimizing "+trip.stores.length+" stops...";
-            // Free open path first to find natural endpoints
             var rough=optimizePath(trip.stores,null,null,null,null);
             var apIn=nearestAirportFull(rough[0][3],rough[0][4]);
             var apOut=nearestAirportFull(rough[rough.length-1][3],rough[rough.length-1][4]);
-            // Re-optimize anchored between the two airports
             var ordered=optimizePath(trip.stores,apIn.lat,apIn.lon,apOut.lat,apOut.lon);
             var points=[[apIn.lon,apIn.lat]];
             ordered.forEach(function(s){points.push([s[4],s[3]])});
             points.push([apOut.lon,apOut.lat]);
-            getLegs(points,function(legs){
-                var retLeg=legs.length>=ordered.length+1?legs[legs.length-1]:{mi:0,mins:0};
-                var tripDays=cutDays(ordered,legs,trip.startDate,7*60,true);
-                var tIdx=meta.length;
-                tripDays.forEach(function(d){d.tripIdx=tIdx});
-                allDays=allDays.concat(tripDays);
-                meta.push({label:"Trip "+(tIdx+1),oneWay:true,airport:apIn,airportOut:apOut,regional:null,storeCount:ordered.length,startDate:trip.startDate,inLeg:legs.length>0?legs[0]:{mi:0,mins:0},retLeg:retLeg,firstSid:ordered[0][0],lastSid:ordered[ordered.length-1][0]});
-                ti++;setTimeout(nextTrip,300);
-            });
+            getLegs(points,function(legs){finishTrip(ordered,legs,apIn,apOut,null,true)});
         }
     }
     nextTrip();
