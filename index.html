@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.6.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.7.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -257,7 +257,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.6.0";
+var APP_VERSION="v1.7.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -1581,65 +1581,90 @@ function restoreView(){
 // ============================================================
 // STORE LIST TABLE (visit order, searchable)
 // ============================================================
-function buildStoreList(filter){
-    var tbl=document.getElementById("listTable");
-    var hdrs=window.uploadHeaders||[];
-    var rows=[];
-    var visit=0;
-    curDays.forEach(function(day,di){
-        var tripLbl="";
-        if(day.tripIdx!==undefined&&window.tripsMeta&&window.tripsMeta[day.tripIdx]){
-            var tm=window.tripsMeta[day.tripIdx];
-            tripLbl=tm.label+" ("+tm.airport.code+")";
+function colIdx(patterns){
+    var h=window.uploadHeaders||[];
+    for(var p=0;p<patterns.length;p++){
+        for(var i=0;i<h.length;i++){
+            if(patterns[p].test(String(h[i]||"")))return i;
         }
+    }
+    return -1;
+}
+function rawVal(raw,idx){
+    if(idx<0||!raw||raw[idx]===null||raw[idx]===undefined)return "";
+    return String(raw[idx]).trim();
+}
+function shortDate(d){
+    if(!d)return "";
+    var dt=new Date(d+"T12:00:00");
+    return (dt.getMonth()+1)+"/"+dt.getDate()+"/"+String(dt.getFullYear()).slice(2);
+}
+
+// Single source of truth: both the Store List table and the XLS export use this.
+function buildExportRows(){
+    var headers=["Store #","Address","City","State","Zip Code","Date","Owner","","Phone","Owner Email","Latitude","Longitude","Open Date","Site Type"];
+    var iState=colIdx([/^state$/i,/state/i]);
+    var iZip=colIdx([/zip/i,/postal/i]);
+    var iFirst=colIdx([/owner.*first/i,/first.*name/i,/^owner$/i,/owner(?!.*(email|phone|mail|tel))/i]);
+    var iLast=colIdx([/owner.*last/i,/last.*name/i,/surname/i]);
+    var iPhone=colIdx([/phone/i,/^tel/i,/mobile/i]);
+    var iEmail=colIdx([/email/i]);
+    var iOpen=colIdx([/open.*date/i,/opened/i]);
+    var iSite=colIdx([/site.*type/i,/store.*type/i,/^type$/i]);
+    if(iLast===iFirst)iLast=-1;
+    var rows=[];
+    curDays.forEach(function(day){
         day.stores.forEach(function(st){
-            visit++;
-            var sid=st.s[0],ld=legD[sid]||{};
-            rows.push({
-                visit:visit,trip:tripLbl,date:day.label,
-                arrival:ld.arrival||"",departure:ld.departure||"",
-                drive:(ld.minutes!==undefined?ld.minutes:""),
-                miles:(ld.miles!==undefined?ld.miles:""),
-                sid:sid,addr:st.s[1],city:st.s[2],
-                raw:st.s[5]||null,done:!!comp[sid]
-            });
+            var s=st.s,raw=s[5]||null;
+            rows.push([
+                s[0],
+                s[1],
+                s[2],
+                rawVal(raw,iState),
+                rawVal(raw,iZip),
+                shortDate(day.date),
+                rawVal(raw,iFirst),
+                rawVal(raw,iLast),
+                rawVal(raw,iPhone),
+                rawVal(raw,iEmail),
+                s[3],
+                s[4],
+                rawVal(raw,iOpen),
+                rawVal(raw,iSite)
+            ]);
         });
     });
-    // Filter
+    return {headers:headers,rows:rows};
+}
+
+function buildStoreList(filter){
+    var tbl=document.getElementById("listTable");
+    var data=buildExportRows();
     var f=(filter||"").trim().toLowerCase();
-    var shown=rows;
+    var shown=data.rows;
     if(f){
-        shown=rows.filter(function(r){
-            if(String(r.sid).toLowerCase().indexOf(f)>=0)return true;
-            if(String(r.city).toLowerCase().indexOf(f)>=0)return true;
-            if(String(r.addr).toLowerCase().indexOf(f)>=0)return true;
-            if(String(r.date).toLowerCase().indexOf(f)>=0)return true;
-            if(r.raw){for(var i=0;i<r.raw.length;i++){if(String(r.raw[i]==null?"":r.raw[i]).toLowerCase().indexOf(f)>=0)return true}}
+        shown=data.rows.filter(function(r){
+            for(var i=0;i<r.length;i++){
+                if(String(r[i]===null||r[i]===undefined?"":r[i]).toLowerCase().indexOf(f)>=0)return true;
+            }
             return false;
         });
     }
-    // Header: fixed cols + all original upload columns
-    var head="<thead><tr><th>#</th><th>Trip</th><th>Date</th><th>Arrive</th><th>Depart</th><th>Drive min</th><th>Miles</th><th>Status</th>";
-    if(hdrs.length){hdrs.forEach(function(h){head+="<th>"+(h||"")+"</th>"})}
-    else{head+="<th>Store #</th><th>Address</th><th>City</th>"}
-    head+="</tr></thead>";
-    var body="<tbody>";
+    var head="<thead><tr>";
+    data.headers.forEach(function(h){head+="<th>"+(h||"&nbsp;")+"</th>"});
+    head+="</tr></thead><tbody>";
+    var body="";
     shown.forEach(function(r){
-        body+="<tr class='"+(r.done?"doneRow":"")+"'>";
-        body+="<td>"+r.visit+"</td><td>"+r.trip+"</td><td>"+r.date+"</td><td>"+r.arrival+"</td><td>"+r.departure+"</td><td>"+r.drive+"</td><td>"+r.miles+"</td><td>"+(r.done?"COMPLETED":"")+"</td>";
-        if(hdrs.length){
-            for(var i=0;i<hdrs.length;i++){
-                var v=(r.raw&&r.raw[i]!=null)?String(r.raw[i]):"";
-                body+="<td>"+v+"</td>";
-            }
-        } else {
-            body+="<td>"+r.sid+"</td><td>"+r.addr+"</td><td>"+r.city+"</td>";
+        var done=!!comp[r[0]];
+        body+="<tr class='"+(done?"doneRow":"")+"'>";
+        for(var i=0;i<r.length;i++){
+            var v=(r[i]===null||r[i]===undefined)?"":r[i];
+            body+="<td>"+v+"</td>";
         }
         body+="</tr>";
     });
-    body+="</tbody>";
-    tbl.innerHTML=head+body;
-    document.getElementById("listCount").textContent=shown.length+" of "+rows.length+" stops";
+    tbl.innerHTML=head+body+"</tbody>";
+    document.getElementById("listCount").textContent=shown.length+" of "+data.rows.length+" stops";
 }
 
 document.getElementById("listBtn").addEventListener("click",function(){
@@ -1657,15 +1682,11 @@ document.getElementById("listSearch").addEventListener("input",function(){buildS
 // EXPORT XLS
 // ============================================================
 document.getElementById("xbtn").addEventListener("click",function(){
-    var data=[["Trip","Date","Store #","Address","City","Arrival","Departure","Drive Min","Road Miles","Status"]];
-    curDays.forEach(function(day){
-        var tripLbl=(day.tripIdx!==undefined&&window.tripsMeta&&window.tripsMeta[day.tripIdx])?window.tripsMeta[day.tripIdx].label+" ("+window.tripsMeta[day.tripIdx].airport.code+")":"";
-        day.stores.forEach(function(st){
-        var sid=st.s[0],ld=legD[sid]||{};
-        data.push([tripLbl,day.label,sid,st.s[1],st.s[2],ld.arrival||"",ld.departure||"",ld.minutes!==undefined?ld.minutes:"",ld.miles!==undefined?ld.miles:"",comp[sid]?"COMPLETED":""]);
-    })});
+    if(curDays.length===0){alert("Route something first.");return}
+    var d=buildExportRows();
+    var data=[d.headers].concat(d.rows);
     var ws=XLSX.utils.aoa_to_sheet(data);
-    ws["!cols"]=[{wch:14},{wch:12},{wch:10},{wch:35},{wch:20},{wch:12},{wch:12},{wch:10},{wch:10},{wch:12}];
+    ws["!cols"]=[{wch:10},{wch:30},{wch:18},{wch:7},{wch:10},{wch:10},{wch:14},{wch:16},{wch:14},{wch:34},{wch:12},{wch:12},{wch:12},{wch:28}];
     var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Route Schedule");
     XLSX.writeFile(wb,"413_Route_Schedule.xlsx");
 });
