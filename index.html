@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.7.3 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.8.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -257,7 +257,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.7.3";
+var APP_VERSION="v1.8.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -537,6 +537,18 @@ document.getElementById("fileIn").addEventListener("change",function(e){
 // ============================================================
 // ROUTING BACKENDS
 // ============================================================
+function fetchTO(url,ms){
+    ms=ms||10000;
+    var ctrl=(typeof AbortController!=="undefined")?new AbortController():null;
+    var id=ctrl?setTimeout(function(){ctrl.abort()},ms):null;
+    return fetch(url,ctrl?{signal:ctrl.signal}:{}).then(function(r){
+        if(id)clearTimeout(id);
+        return r;
+    }).catch(function(err){
+        if(id)clearTimeout(id);
+        throw err;
+    });
+}
 function osrmLegs(points,callback){
     var allLegs=[];if(points.length<2){callback(allLegs);return}
     var bs=80,batches=[];
@@ -546,7 +558,7 @@ function osrmLegs(points,callback){
         if(bi>=batches.length){callback(allLegs);return}
         var batch=batches[bi];var c=batch.map(function(p){return p[0]+","+p[1]}).join(";");
         statusEl.textContent="OSRM drive times... batch "+(bi+1)+"/"+batches.length;
-        fetch("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false").then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(function(data){
+        fetchTO("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false",10000).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}).then(function(data){
             if(data.code!=="Ok")throw new Error(data.code);
             data.routes[0].legs.forEach(function(leg){allLegs.push({mi:Math.round(leg.distance*0.000621371*10)/10,mins:Math.round(leg.duration/60)})});
             bi++;setTimeout(nb,200);
@@ -588,7 +600,7 @@ function googleLegs(points,callback){
                 console.error("Google Directions status:",status,"- falling back to OSRM for this chunk");
                 // OSRM fallback for this chunk
                 var c=chunk.map(function(p){return p[0]+","+p[1]}).join(";");
-                fetch("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false").then(function(r){return r.json()}).then(function(data){
+                fetchTO("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false",10000).then(function(r){return r.json()}).then(function(data){
                     if(data.code==="Ok"){data.routes[0].legs.forEach(function(leg){allLegs.push({mi:Math.round(leg.distance*0.000621371*10)/10,mins:Math.round(leg.duration/60)})})}
                     else{for(var j=0;j<chunk.length-1;j++)allLegs.push({mi:0,mins:15})}
                     ci++;setTimeout(nc,300);
@@ -610,7 +622,10 @@ function getDayGeometry(sts,callback){
         var origin={lat:sts[0].s[3],lng:sts[0].s[4]};
         var dest={lat:sts[sts.length-1].s[3],lng:sts[sts.length-1].s[4]};
         var wps=sts.slice(1,-1).map(function(st){return{location:{lat:st.s[3],lng:st.s[4]},stopover:true}});
+        var done=false;
+        var wd=setTimeout(function(){if(!done){done=true;callback(null)}},10000);
         gDirSvc.route({origin:origin,destination:dest,waypoints:wps,travelMode:google.maps.TravelMode.DRIVING},function(res,status){
+            if(done)return;done=true;clearTimeout(wd);
             if(status==="OK"&&res.routes.length){
                 callback(res.routes[0].overview_path.map(function(p){return[p.lat(),p.lng()]}));
             } else callback(null);
@@ -619,7 +634,7 @@ function getDayGeometry(sts,callback){
     }
     // OSRM
     var c=sts.map(function(st){return st.s[4]+","+st.s[3]}).join(";");
-    fetch("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=full&geometries=geojson&steps=false").then(function(r){return r.json()}).then(function(data){
+    fetchTO("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=full&geometries=geojson&steps=false",10000).then(function(r){return r.json()}).then(function(data){
         if(data.code==="Ok")callback(data.routes[0].geometry.coordinates.map(function(c){return[c[1],c[0]]}));
         else callback(null);
     }).catch(function(){callback(null)});
@@ -707,7 +722,14 @@ function drawDays(days,callback){
         if(sts.length<2){routeLayers.push(L.layerGroup().addTo(map));di++;setTimeout(ndr,100);return}
         var col=colors[di%colors.length];
         statusEl.textContent="Drawing route "+(di+1)+"/"+days.length+"...";
+        var settled=false;
+        var watchdog=setTimeout(function(){
+            if(settled)return;settled=true;
+            routeLayers.push(L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map));
+            di++;setTimeout(ndr,300);
+        },12000);
         getDayGeometry(sts,function(geom){
+            if(settled)return;settled=true;clearTimeout(watchdog);
             if(geom)routeLayers.push(L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map));
             else routeLayers.push(L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map));
             di++;setTimeout(ndr,300);
@@ -720,7 +742,7 @@ function fetchOvn(days,callback){
     var pairs=[];for(var i=0;i<days.length-1;i++){if(days[i].tripIdx!==undefined&&days[i].tripIdx!==days[i+1].tripIdx)continue;var ls=days[i].stores[days[i].stores.length-1],fs=days[i+1].stores[0];pairs.push({fs:ls.s[0],fc:ls.s[2],flat:ls.s[3],flon:ls.s[4],ts:fs.s[0],tc:fs.s[2],tlat:fs.s[3],tlon:fs.s[4]})}
     var pi=0;
     function next(){if(pi>=pairs.length){callback();return}var p=pairs[pi];
-        fetch("https://router.project-osrm.org/route/v1/driving/"+p.flon+","+p.flat+";"+p.tlon+","+p.tlat+"?overview=false").then(function(r){return r.json()}).then(function(data){if(data.code==="Ok"){var rt=data.routes[0],mi=Math.round(rt.distance*0.000621371*10)/10,mins=Math.round(rt.duration/60),h=Math.floor(mins/60),m=mins%60,dt=h>0?h+"hr "+m+"min":m+"min";ovnD[p.fs]={to:p.tc,dt:dt,mi:mi};ovnD["f_"+p.ts]={fr:p.fc,dt:dt,mi:mi,type:"Overnight"}}pi++;setTimeout(next,150)}).catch(function(){pi++;setTimeout(next,150)});
+        fetchTO("https://router.project-osrm.org/route/v1/driving/"+p.flon+","+p.flat+";"+p.tlon+","+p.tlat+"?overview=false",10000).then(function(r){return r.json()}).then(function(data){if(data.code==="Ok"){var rt=data.routes[0],mi=Math.round(rt.distance*0.000621371*10)/10,mins=Math.round(rt.duration/60),h=Math.floor(mins/60),m=mins%60,dt=h>0?h+"hr "+m+"min":m+"min";ovnD[p.fs]={to:p.tc,dt:dt,mi:mi};ovnD["f_"+p.ts]={fr:p.fc,dt:dt,mi:mi,type:"Overnight"}}pi++;setTimeout(next,150)}).catch(function(){pi++;setTimeout(next,150)});
     }
     statusEl.textContent="Loading overnight routes...";next();
 }
@@ -1568,7 +1590,14 @@ function restoreView(){
         if(sts.length<2){routeLayers.push(L.layerGroup().addTo(map));rdi++;setTimeout(ds,50);return}
         var col=colors[rdi%colors.length];
         statusEl.textContent="Drawing route "+(rdi+1)+"/"+curDays.length+"...";
+        var settled2=false;
+        var watchdog2=setTimeout(function(){
+            if(settled2)return;settled2=true;
+            routeLayers.push(L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map));
+            rdi++;setTimeout(ds,250);
+        },12000);
         getDayGeometry(sts,function(geom){
+            if(settled2)return;settled2=true;clearTimeout(watchdog2);
             if(geom)routeLayers.push(L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map));
             else routeLayers.push(L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map));
             rdi++;setTimeout(ds,250);
@@ -1605,8 +1634,8 @@ function buildExportRows(){
     var headers=["Store #","Address","City","State","Zip Code","Date","Owner","","Phone","Owner Email","Latitude","Longitude","Open Date","Site Type"];
     var iState=colIdx([/^state$/i,/state/i]);
     var iZip=colIdx([/zip/i,/postal/i]);
-    var iFirst=colIdx([/owner.*first/i,/first.*name/i,/^owner$/i,/owner(?!.*(email|phone|mail|tel))/i]);
-    var iLast=colIdx([/owner.*last/i,/last.*name/i,/surname/i]);
+    var iFirst=colIdx([/owner.*first/i,/first.*name/i,/^first$/i,/^owner$/i]);
+    var iLast=colIdx([/owner.*last/i,/last.*name/i,/^last$/i,/surname/i]);
     var iPhone=colIdx([/phone/i,/^tel/i,/mobile/i]);
     var iEmail=colIdx([/email/i]);
     var iOpen=colIdx([/open.*date/i,/opened/i]);
@@ -1623,10 +1652,16 @@ function buildExportRows(){
     var noHdr=(!window.uploadHeaders||window.uploadHeaders.length===0);
     if(noHdr&&iState<0&&iZip<0&&iEmail<0){
         var sample=null;
-        curDays.forEach(function(day){day.stores.forEach(function(st){if(!sample&&st.s[5]&&st.s[5].length>=13)sample=st.s[5]})});
+        curDays.forEach(function(day){day.stores.forEach(function(st){if(!sample&&st.s[5])sample=st.s[5]})});
         if(sample){
-            // Known layout: 0 Store#,1 Address,2 City,3 State,4 Zip,5 First,6 Last,7 Phone,8 Email,9 Lat,10 Lon,11 OpenDate,12 SiteType
-            iState=3;iZip=4;iFirst=5;iLast=6;iPhone=7;iEmail=8;iOpen=11;iSite=12;
+            var w=sample.length;
+            if(w>=14){
+                // 14-col McD layout WITH date: 0 Store#,1 Addr,2 City,3 State,4 Zip,5 Date,6 First,7 Last,8 Phone,9 Email,10 Lat,11 Lon,12 OpenDate,13 SiteType
+                iState=3;iZip=4;iFirst=6;iLast=7;iPhone=8;iEmail=9;iOpen=12;iSite=13;
+            } else if(w>=13){
+                // 13-col layout WITHOUT date
+                iState=3;iZip=4;iFirst=5;iLast=6;iPhone=7;iEmail=8;iOpen=11;iSite=12;
+            }
         }
     }
     var rows=[];
