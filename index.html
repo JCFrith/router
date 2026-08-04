@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.9.1 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.10.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -257,7 +257,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.9.1";
+var APP_VERSION="v1.10.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -371,13 +371,30 @@ document.getElementById("loginPass").addEventListener("keydown",function(e){if(e
 
 
 function checkAuth(){
+    var settled=false;
+    var authTO=setTimeout(function(){
+        if(settled)return;settled=true;
+        showLogin();
+    },8000);
     window.sbCurrentUser().then(function(user){
+        if(settled)return;settled=true;clearTimeout(authTO);
         if(user)onSignedIn(user);
         else showLogin();
-    }).catch(function(){showLogin()});
+    }).catch(function(){
+        if(settled)return;settled=true;clearTimeout(authTO);
+        showLogin();
+    });
 }
 window.addEventListener("sbready",checkAuth);
 if(window.sbReady)checkAuth();
+// Absolute fallback: if Supabase never loads/connects at all, don't leave the
+// screen covered indefinitely - surface the login form after 10s regardless.
+setTimeout(function(){
+    if(!window.sbReady){
+        var ov=document.getElementById("loginOverlay");
+        if(ov&&ov.style.display!=="none")showLogin();
+    }
+},10000);
 
 var allStores=[];
 var comp={};
@@ -739,6 +756,10 @@ function drawDays(days,callback){
         var sts=day.stores;
         if(sts.length<2){routeLayers[di]=L.layerGroup().addTo(map);drawn++;statusEl.textContent="Drawing routes... "+drawn+"/"+days.length;cb();return}
         var col=colors[di%colors.length];
+        if(day.geom){
+            routeLayers[di]=L.polyline(day.geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);
+            drawn++;statusEl.textContent="Drawing routes... "+drawn+"/"+days.length;cb();return;
+        }
         var settled=false;
         var watchdog=setTimeout(function(){
             if(settled)return;settled=true;
@@ -747,7 +768,7 @@ function drawDays(days,callback){
         },12000);
         getDayGeometry(sts,function(geom){
             if(settled)return;settled=true;clearTimeout(watchdog);
-            if(geom)routeLayers[di]=L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);
+            if(geom){day.geom=geom;routeLayers[di]=L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);}
             else routeLayers[di]=L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map);
             drawn++;statusEl.textContent="Drawing routes... "+drawn+"/"+days.length;cb();
         });
@@ -1128,6 +1149,10 @@ function redrawFromCurDays(callback){
         var sts=day.stores;
         if(sts.length<2){routeLayers[di]=L.layerGroup().addTo(map);cb();return}
         var col=colors[di%colors.length];
+        if(day.geom){
+            routeLayers[di]=L.polyline(day.geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);
+            cb();return;
+        }
         var settled3=false;
         var watchdog3=setTimeout(function(){
             if(settled3)return;settled3=true;
@@ -1136,7 +1161,7 @@ function redrawFromCurDays(callback){
         },12000);
         getDayGeometry(sts,function(geom){
             if(settled3)return;settled3=true;clearTimeout(watchdog3);
-            if(geom)routeLayers[di]=L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);
+            if(geom){day.geom=geom;routeLayers[di]=L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);}
             else routeLayers[di]=L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map);
             cb();
         });
@@ -1618,6 +1643,10 @@ function restoreView(){
         var sts=day.stores;
         if(sts.length<2){routeLayers[rdi]=L.layerGroup().addTo(map);drawnR++;statusEl.textContent="Drawing routes... "+drawnR+"/"+curDays.length;cb();return}
         var col=colors[rdi%colors.length];
+        if(day.geom){
+            routeLayers[rdi]=L.polyline(day.geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);
+            drawnR++;statusEl.textContent="Drawing routes... "+drawnR+"/"+curDays.length;cb();return;
+        }
         var settled2=false;
         var watchdog2=setTimeout(function(){
             if(settled2)return;settled2=true;
@@ -1626,7 +1655,7 @@ function restoreView(){
         },12000);
         getDayGeometry(sts,function(geom){
             if(settled2)return;settled2=true;clearTimeout(watchdog2);
-            if(geom)routeLayers[rdi]=L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);
+            if(geom){day.geom=geom;routeLayers[rdi]=L.polyline(geom,{color:col,weight:3.5,opacity:0.7}).addTo(map);}
             else routeLayers[rdi]=L.polyline(sts.map(function(st){return[st.s[3],st.s[4]]}),{color:col,weight:2,opacity:0.4,dashArray:"4,6"}).addTo(map);
             drawnR++;statusEl.textContent="Drawing routes... "+drawnR+"/"+curDays.length;cb();
         });
