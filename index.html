@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.7.1 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.7.3 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -257,7 +257,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.7.1";
+var APP_VERSION="v1.7.3";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -383,7 +383,7 @@ var allStores=[];
 var comp={};
 try{var ls0=localStorage.getItem("413comp");if(ls0)comp=JSON.parse(ls0)}catch(e){}
 function saveC(){try{localStorage.setItem("413comp",JSON.stringify(comp))}catch(e){}}
-function saveRouteLS(){try{localStorage.setItem("413route",JSON.stringify({curDays:curDays,legD:legD,ovnD:ovnD,allStores:allStores,tripsMeta:window.tripsMeta}))}catch(e){}}
+function saveRouteLS(){try{localStorage.setItem("413route",JSON.stringify({curDays:curDays,legD:legD,ovnD:ovnD,allStores:allStores,tripsMeta:window.tripsMeta,uploadHeaders:window.uploadHeaders,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay,tripRest:window.tripRest}))}catch(e){}}
 function loadRouteLS(){try{var r=localStorage.getItem("413route");if(!r)return null;return JSON.parse(r)}catch(e){return null}}
 
 var map=L.map("map",{zoomControl:false}).setView([38,-96],4);
@@ -1612,13 +1612,22 @@ function buildExportRows(){
     var iOpen=colIdx([/open.*date/i,/opened/i]);
     var iSite=colIdx([/site.*type/i,/store.*type/i,/^type$/i]);
     if(iLast===iFirst)iLast=-1;
-    // Fallback: many exports leave the last-name column header blank, sitting
-    // immediately to the right of the owner column. Nothing to pattern-match, so
-    // adopt the next column when its header is empty.
     if(iLast<0&&iFirst>=0){
         var hh=window.uploadHeaders||[];
         var nxt=iFirst+1;
         if(nxt<hh.length&&String(hh[nxt]||"").trim()==="")iLast=nxt;
+    }
+    // Fixed-position fallback for the standard McDonald's export when headers are missing
+    // (e.g. a route saved before the tool captured headers). Only applied when the raw row
+    // width matches that known 13-column layout, so it can't scramble an unknown format.
+    var noHdr=(!window.uploadHeaders||window.uploadHeaders.length===0);
+    if(noHdr&&iState<0&&iZip<0&&iEmail<0){
+        var sample=null;
+        curDays.forEach(function(day){day.stores.forEach(function(st){if(!sample&&st.s[5]&&st.s[5].length>=13)sample=st.s[5]})});
+        if(sample){
+            // Known layout: 0 Store#,1 Address,2 City,3 State,4 Zip,5 First,6 Last,7 Phone,8 Email,9 Lat,10 Lon,11 OpenDate,12 SiteType
+            iState=3;iZip=4;iFirst=5;iLast=6;iPhone=7;iEmail=8;iOpen=11;iSite=12;
+        }
     }
     var rows=[];
     curDays.forEach(function(day){
@@ -1817,6 +1826,7 @@ document.getElementById("clrbtn").addEventListener("click",function(){
 var saved=loadRouteLS();
 if(saved&&saved.allStores&&saved.allStores.length>0&&saved.curDays&&saved.curDays.length>0){
     allStores=saved.allStores;curDays=saved.curDays;legD=saved.legD||{};ovnD=saved.ovnD||{};window.tripsMeta=saved.tripsMeta||null;
+    window.uploadHeaders=saved.uploadHeaders||window.uploadHeaders;window.tripAnchors=saved.tripAnchors||{};window.tripOneWay=saved.tripOneWay||{};window.tripRest=saved.tripRest||{};
     placePins();updInfo();
     document.getElementById("finfo").style.display="block";
     document.getElementById("finfo").textContent=allStores.length+" locations (saved session)";
