@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.10.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.13.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -161,6 +161,10 @@
             <input type="password" id="loginPass" style="width:100%;padding:9px 10px;border:1px solid #ccc;border-radius:5px;font-size:14px;box-sizing:border-box;margin-bottom:16px" autocomplete="current-password">
             <button id="loginBtn" style="width:100%;padding:10px;background:#3B79B4;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer">Sign In</button>
             <div id="loginErr" style="color:#c0392b;font-size:12px;margin-top:10px;display:none"></div>
+            <div id="loginStatus" style="color:#999;font-size:11px;margin-top:12px;text-align:center"></div>
+            <div id="skipLoginWrap" style="text-align:center;margin-top:8px;display:none">
+                <span id="skipLoginBtn" style="color:#3B79B4;font-size:11px;text-decoration:underline;cursor:pointer">Continue without signing in (local use only, no cloud sync)</span>
+            </div>
         </div>
     </div>
     <button id="settingsToggle" title="Settings">&#9881;</button>
@@ -257,7 +261,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.10.0";
+var APP_VERSION="v1.13.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -370,31 +374,47 @@ document.getElementById("loginPass").addEventListener("keydown",function(e){if(e
 
 
 
+function setLoginStatus(msg){var el=document.getElementById("loginStatus");if(el)el.textContent=msg||""}
+function showSkipLink(){var w=document.getElementById("skipLoginWrap");if(w)w.style.display="block"}
+
 function checkAuth(){
+    setLoginStatus("Connecting...");
     var settled=false;
     var authTO=setTimeout(function(){
         if(settled)return;settled=true;
+        setLoginStatus("Still trying to connect...");
+        showSkipLink();
         showLogin();
-    },8000);
+    },5000);
     window.sbCurrentUser().then(function(user){
-        if(settled)return;settled=true;clearTimeout(authTO);
+        if(settled){if(user)onSignedIn(user);return}
+        settled=true;clearTimeout(authTO);
         if(user)onSignedIn(user);
-        else showLogin();
+        else{setLoginStatus("");showLogin()}
     }).catch(function(){
-        if(settled)return;settled=true;clearTimeout(authTO);
+        if(settled)return;
+        settled=true;clearTimeout(authTO);
+        setLoginStatus("Could not reach the account system.");
+        showSkipLink();
         showLogin();
     });
 }
 window.addEventListener("sbready",checkAuth);
 if(window.sbReady)checkAuth();
 // Absolute fallback: if Supabase never loads/connects at all, don't leave the
-// screen covered indefinitely - surface the login form after 10s regardless.
+// screen covered indefinitely - surface the login form (with a skip option) regardless.
 setTimeout(function(){
     if(!window.sbReady){
-        var ov=document.getElementById("loginOverlay");
-        if(ov&&ov.style.display!=="none")showLogin();
+        setLoginStatus("Could not connect. You can continue without signing in.");
+        showSkipLink();
+        showLogin();
     }
-},10000);
+},7000);
+
+document.getElementById("skipLoginBtn").addEventListener("click",function(){
+    setLoginStatus("Local mode: not signed in. Cloud save/load is unavailable until you sign in.");
+    hideLogin();
+});
 
 var allStores=[];
 var comp={};
@@ -456,8 +476,9 @@ if(navigator.geolocation)navigator.geolocation.watchPosition(function(p){
 var lbtn=document.getElementById("lbtn");
 lbtn.addEventListener("click",function(){
     liveMode=!liveMode;
-    if(liveMode){lbtn.classList.add("active");lbtn.textContent="Live Mode ON - Click to Disable";document.getElementById("rdate").disabled=true;document.getElementById("rtime").disabled=true;gpsEl.style.display="block";gpsEl.textContent=userLat?"GPS: "+userLat.toFixed(4)+", "+userLon.toFixed(4):"Waiting for GPS..."}
-    else{lbtn.classList.remove("active");lbtn.textContent="Use Current Location & Time";document.getElementById("rdate").disabled=false;document.getElementById("rtime").disabled=false;gpsEl.style.display="none"}
+    var rb2=document.getElementById("rbtn");
+    if(liveMode){lbtn.classList.add("active");lbtn.textContent="Live Mode ON - Click to Disable";document.getElementById("rdate").disabled=true;document.getElementById("rtime").disabled=true;gpsEl.style.display="block";gpsEl.textContent=userLat?"GPS: "+userLat.toFixed(4)+", "+userLon.toFixed(4):"Waiting for GPS...";if(rb2)rb2.textContent="Update Today From Here"}
+    else{lbtn.classList.remove("active");lbtn.textContent="Use Current Location & Time";document.getElementById("rdate").disabled=false;document.getElementById("rtime").disabled=false;gpsEl.style.display="none";if(rb2)rb2.textContent="Route It"}
 });
 
 var colors=["#f44336","#ff9800","#ffeb3b","#4caf50","#00bcd4","#2196f3","#9c27b0","#e91e63","#00e676","#ff5722","#795548","#607d8b","#8bc34a","#ff4081","#3f51b5","#009688","#cddc39","#ffc107","#673ab7","#03a9f4","#f06292","#aed581","#ba68c8","#4db6ac","#dce775"];
@@ -678,6 +699,13 @@ function getDayGeometry(sts,callback){
 // ============================================================
 // CUT DAYS: arrive by cutoff, cap per week, skip weekends
 // ============================================================
+function getDayStartMin(){
+    try{
+        var el=document.getElementById("rtime");
+        if(el&&el.value){var tv=el.value.split(":");var m=parseInt(tv[0])*60+parseInt(tv[1]);if(!isNaN(m))return m}
+    }catch(e){}
+    return 9*60;
+}
 function cutDays(remaining,legs,startDate,startMin,hasGPS){
     var days=[],curDate=startDate,clock=startMin,curStores=[];
     var maxArrival=parseInt(document.getElementById("cutoff").value);
@@ -686,15 +714,17 @@ function cutDays(remaining,legs,startDate,startMin,hasGPS){
     var legOff=hasGPS?1:0;
     var weekMode=!!window.weekFocusMode; // single-week edit: weekend overflow, no weekly cap
     var tripMode=!!window.tripBuildMode; // trip build: weekdays only, no weekly cap
+    var liveMode2=!!window.liveDayMode; // live "rest of today" update: single day only, no rollover
 
     function wk(d){return mondayOf(d)}
+    var dayStartMin=getDayStartMin();
     function advanceDay(){
         if(curStores.length>0){days.push({date:curDate,label:dateLbl(curDate),stores:curStores.slice()});curStores=[]}
-        curDate=weekMode?nextDayAny(curDate):nextWeekday(curDate);clock=7*60;
+        curDate=weekMode?nextDayAny(curDate):nextWeekday(curDate);clock=dayStartMin;
     }
     function advanceWeek(){
         if(curStores.length>0){days.push({date:curDate,label:dateLbl(curDate),stores:curStores.slice()});curStores=[]}
-        curDate=nextMonday(curDate);clock=7*60;
+        curDate=nextMonday(curDate);clock=dayStartMin;
     }
 
     for(var i=0;i<remaining.length;i++){
@@ -708,6 +738,7 @@ function cutDays(remaining,legs,startDate,startMin,hasGPS){
 
         var arrival=clock+dm;
         if(arrival>maxArrival&&curStores.length>0){
+            if(liveMode2)break; // stop entirely - remaining stores are simply not reachable today
             advanceDay();
             if(!weekMode&&!tripMode){
                 var wkKey2=wk(curDate);
@@ -1483,7 +1514,7 @@ document.getElementById("tripBtn").addEventListener("click",function(){
             var retLeg=legs.length>=ordered.length+1?legs[legs.length-1]:{mi:0,mins:0};
             // Within a trip: continuous WEEKDAYS only (skip weekends), no weekly cap.
             window.tripBuildMode=true;
-            var tripDays=cutDays(ordered,legs,tripStartDate,9*60,true);
+            var tripDays=cutDays(ordered,legs,tripStartDate,getDayStartMin(),true);
             window.tripBuildMode=false;
             var tIdx=meta.length;
             tripDays.forEach(function(d){d.tripIdx=tIdx});
@@ -1541,6 +1572,77 @@ function injectAirportOvn(){
 
 var routing=false;
 function routingDone(){routing=false;var rb=document.getElementById("rbtn");rb.disabled=false;rb.style.opacity="1"}
+// ============================================================
+// LIVE MODE: update just the rest of TODAY from current GPS/time
+// ============================================================
+function doLiveDayUpdate(){
+    if(routing)return;
+    if(userLat===null){alert("Waiting for GPS fix.");return}
+    if(allStores.length===0){alert("Upload a schedule first.");return}
+    routing=true;
+    var lb=document.getElementById("lbtn");lb.disabled=true;
+    statusEl.style.display="block";statusEl.textContent="Finding your remaining stores...";
+    document.getElementById("xbtn").style.display="none";document.getElementById("listBtn").style.display="none";
+
+    var now=new Date();
+    // Local date, not UTC - toISOString would roll to tomorrow after ~7 PM Central
+    var todayStr=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+    var nowMin=now.getHours()*60+now.getMinutes();
+
+    // Pool: every not-yet-completed store currently anywhere in the visible schedule.
+    // If nothing has been routed yet, fall back to the full uploaded list.
+    var pool=[];
+    if(curDays.length>0){
+        curDays.forEach(function(day){day.stores.forEach(function(st){if(!comp[st.s[0]])pool.push(st.s)})});
+    } else {
+        pool=allStores.filter(function(s){return !comp[s[0]]});
+    }
+    if(pool.length===0){
+        statusEl.textContent="Nothing left to schedule.";
+        setTimeout(function(){statusEl.style.display="none"},2000);
+        routingDone();lb.disabled=false;return;
+    }
+
+    statusEl.textContent="Optimizing from your location...";
+    var ordered=optimizePath(pool,userLat,userLon,null,null);
+    var points=[[userLon,userLat]];
+    ordered.forEach(function(s){points.push([s[4],s[3]])});
+
+    getLegs(points,function(legs){
+        window.liveDayMode=true;
+        var todayDays=cutDays(ordered,legs,todayStr,nowMin,true);
+        window.liveDayMode=false;
+
+        var todayDay=todayDays.length?todayDays[0]:{date:todayStr,label:dateLbl(todayStr),stores:[]};
+        var keptSids={};
+        todayDay.stores.forEach(function(st){keptSids[st.s[0]]=true});
+
+        // Pull those stores out of wherever else they were sitting so nothing is double-booked,
+        // and drop the old entry for today entirely since it's being replaced.
+        var rebuilt=[];
+        curDays.forEach(function(day){
+            if(day.date===todayStr)return;
+            var kept=day.stores.filter(function(st){return !keptSids[st.s[0]]});
+            if(kept.length>0)rebuilt.push({date:day.date,label:day.label,stores:kept,tripIdx:day.tripIdx});
+        });
+
+        var placedCount=todayDay.stores.length;
+        var notReached=pool.length-placedCount;
+
+        rebuilt.push(todayDay);
+        rebuilt.sort(function(a,b){return new Date(a.date)-new Date(b.date)});
+        curDays=rebuilt;
+
+        statusEl.textContent="Drawing today's route...";
+        drawDays(curDays,function(){
+            routingDone();lb.disabled=false;
+            var msg=placedCount+" stores reachable today before your cutoff.";
+            if(notReached>0)msg+=" "+notReached+" won't fit today - re-run Route It or Rebuild Trips later to reschedule them.";
+            setTimeout(function(){alert(msg)},300);
+        });
+    });
+}
+
 function doRecalc(startDate,startMin,fromLat,fromLon){
     if(routing)return;
     if(!focusWeek&&focusTrip===null){fullSnapshot=null}
@@ -1582,16 +1684,18 @@ document.getElementById("rbtn").addEventListener("click",function(){
         placePins();updInfo();
     }
     if(allStores.length===0){alert("Upload a file first.");return}
-    var startDate,startMin,fromLat=null,fromLon=null;
     if(liveMode){
-        if(userLat===null){alert("Waiting for GPS fix.");return}
-        var now=new Date();startDate=now.toISOString().slice(0,10);startMin=now.getHours()*60+now.getMinutes();fromLat=userLat;fromLon=userLon;
-    } else {
-        startDate=document.getElementById("rdate").value;
-        if(!startDate){alert("Pick a start date.");return}
-        var tv=document.getElementById("rtime").value.split(":");startMin=parseInt(tv[0])*60+parseInt(tv[1]);
+        // Live mode updates only the rest of TODAY from your current position - it never
+        // touches other days. Use "Route It" normally (with live mode off) to build or
+        // rebuild the full multi-day schedule.
+        doLiveDayUpdate();
+        return;
     }
-    doRecalc(startDate,startMin,fromLat,fromLon);
+    var startDate=document.getElementById("rdate").value;
+    if(!startDate){alert("Pick a start date.");return}
+    var tv=document.getElementById("rtime").value.split(":");
+    var startMin=parseInt(tv[0])*60+parseInt(tv[1]);
+    doRecalc(startDate,startMin,null,null);
 });
 
 // ============================================================
