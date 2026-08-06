@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.14.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.15.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -144,6 +144,8 @@
         #listTable{border-collapse:collapse;width:100%;font-size:12px}
         #listTable th{position:sticky;top:0;background:#3B79B4;color:#fff;text-align:left;padding:8px 10px;font-weight:600;white-space:nowrap;z-index:1}
         #listTable td{padding:6px 10px;border-bottom:1px solid #f0f0f0;white-space:nowrap}
+        #listTable td:first-child,#listTable th:first-child{width:44px;text-align:center}
+        .listDoneCb{width:16px;height:16px;cursor:pointer}
         #listTable tr.doneRow td{color:#aaa;text-decoration:line-through}
         #listTable tr:hover td{background:#EDF4FB}
         #listClose{background:#fff;color:#c0392b;border:1px solid #c0392b;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',Arial,sans-serif}
@@ -264,7 +266,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.14.0";
+var APP_VERSION="v1.15.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -655,30 +657,47 @@ function googleLegs(points,callback){
         if(end>=points.length)break;
     }
     var ci=0;
+    var gDead=false; // set when the Google SDK fails to respond at all - remaining chunks skip straight to OSRM
+    function osrmChunk(chunk){
+        statusEl.textContent="Drive times (OSRM)... batch "+(ci+1)+"/"+chunks.length;
+        var c=chunk.map(function(p){return p[0]+","+p[1]}).join(";");
+        fetchTO("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false",10000).then(function(r){return r.json()}).then(function(data){
+            if(data.code==="Ok"){data.routes[0].legs.forEach(function(leg){allLegs.push({mi:Math.round(leg.distance*0.000621371*10)/10,mins:Math.round(leg.duration/60)})})}
+            else{for(var j=0;j<chunk.length-1;j++)allLegs.push({mi:0,mins:15})}
+            ci++;setTimeout(nc,300);
+        }).catch(function(){for(var j=0;j<chunk.length-1;j++)allLegs.push({mi:0,mins:15});ci++;setTimeout(nc,300)});
+    }
     function nc(){
         if(ci>=chunks.length){callback(allLegs);return}
         var chunk=chunks[ci];
+        if(gDead||!gDirSvc){osrmChunk(chunk);return}
         statusEl.textContent="Google drive times... batch "+(ci+1)+"/"+chunks.length;
         var origin={lat:chunk[0][1],lng:chunk[0][0]};
         var dest={lat:chunk[chunk.length-1][1],lng:chunk[chunk.length-1][0]};
         var wps=chunk.slice(1,-1).map(function(p){return{location:{lat:p[1],lng:p[0]},stopover:true}});
-        gDirSvc.route({origin:origin,destination:dest,waypoints:wps,travelMode:google.maps.TravelMode.DRIVING},function(res,status){
-            if(status==="OK"&&res.routes.length){
-                res.routes[0].legs.forEach(function(leg){
-                    allLegs.push({mi:Math.round(leg.distance.value*0.000621371*10)/10,mins:Math.round(leg.duration.value/60)});
-                });
-                ci++;setTimeout(nc,300);
-            } else {
-                console.error("Google Directions status:",status,"- falling back to OSRM for this chunk");
-                // OSRM fallback for this chunk
-                var c=chunk.map(function(p){return p[0]+","+p[1]}).join(";");
-                fetchTO("https://router.project-osrm.org/route/v1/driving/"+c+"?overview=false&steps=false",10000).then(function(r){return r.json()}).then(function(data){
-                    if(data.code==="Ok"){data.routes[0].legs.forEach(function(leg){allLegs.push({mi:Math.round(leg.distance*0.000621371*10)/10,mins:Math.round(leg.duration/60)})})}
-                    else{for(var j=0;j<chunk.length-1;j++)allLegs.push({mi:0,mins:15})}
+        var settled=false;
+        var wd=setTimeout(function(){
+            if(settled)return;settled=true;
+            gDead=true; // SDK unresponsive: don't burn 10s on every remaining chunk
+            console.error("Google Directions timed out - switching to OSRM for all remaining batches");
+            osrmChunk(chunk);
+        },10000);
+        try{
+            gDirSvc.route({origin:origin,destination:dest,waypoints:wps,travelMode:google.maps.TravelMode.DRIVING},function(res,status){
+                if(settled)return;settled=true;clearTimeout(wd);
+                if(status==="OK"&&res.routes.length){
+                    res.routes[0].legs.forEach(function(leg){
+                        allLegs.push({mi:Math.round(leg.distance.value*0.000621371*10)/10,mins:Math.round(leg.duration.value/60)});
+                    });
                     ci++;setTimeout(nc,300);
-                }).catch(function(){for(var j=0;j<chunk.length-1;j++)allLegs.push({mi:0,mins:15});ci++;setTimeout(nc,300)});
-            }
-        });
+                } else {
+                    console.error("Google Directions status:",status,"- falling back to OSRM for this chunk");
+                    osrmChunk(chunk);
+                }
+            });
+        }catch(e){
+            if(!settled){settled=true;clearTimeout(wd);gDead=true;osrmChunk(chunk)}
+        }
     }
     nc();
 }
@@ -1882,13 +1901,14 @@ function buildStoreList(filter){
             return false;
         });
     }
-    var head="<thead><tr>";
+    var head="<thead><tr><th>Done</th>";
     data.headers.forEach(function(h){head+="<th>"+(h||"&nbsp;")+"</th>"});
     head+="</tr></thead><tbody>";
     var body="";
     shown.forEach(function(r){
         var done=!!comp[r[0]];
         body+="<tr class='"+(done?"doneRow":"")+"'>";
+        body+="<td><input type='checkbox' class='listDoneCb' data-sid='"+r[0]+"'"+(done?" checked":"")+"></td>";
         for(var i=0;i<r.length;i++){
             var v=(r[i]===null||r[i]===undefined)?"":r[i];
             body+="<td>"+v+"</td>";
@@ -1909,6 +1929,20 @@ document.getElementById("listBtn").addEventListener("click",function(){
 document.getElementById("listClose").addEventListener("click",function(){document.getElementById("listModal").style.display="none"});
 document.getElementById("listModal").addEventListener("click",function(e){if(e.target.id==="listModal")this.style.display="none"});
 document.getElementById("listSearch").addEventListener("input",function(){buildStoreList(this.value)});
+document.getElementById("listTable").addEventListener("change",function(e){
+    var cb=e.target.closest(".listDoneCb");if(!cb)return;
+    var sid=cb.getAttribute("data-sid");if(!sid)return;
+    if(cb.checked)comp[sid]=true;else delete comp[sid];
+    saveC();
+    var m=mkrs[sid];if(m){var d2=!!comp[sid];m.mk.setStyle({fillColor:d2?"#999":m.col,color:d2?"#666":"#fff",fillOpacity:d2?0.4:0.9});m.mk.getPopup().setContent(pp(m.dayIdx,sid,m.addr,m.city,m.idx,m.tot))}
+    updInfo();
+    if(curDays.length)buildLeg(curDays);
+    // Re-render to update strikethrough, preserving scroll position and search filter
+    var sc=document.getElementById("listScroll");var st=sc?sc.scrollTop:0;
+    buildStoreList(document.getElementById("listSearch").value);
+    if(sc)sc.scrollTop=st;
+});
+
 
 // ============================================================
 // EXPORT XLS
