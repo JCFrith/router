@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.13.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.14.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -202,11 +202,14 @@
         <input type="time" id="rtime" value="09:00">
         <label>Last Arrival By</label>
         <select id="cutoff">
+            <option value="900">3:00 PM</option>
             <option value="960">4:00 PM</option>
-            <option value="990">4:30 PM</option>
             <option value="1020" selected>5:00 PM</option>
-            <option value="1050">5:30 PM</option>
             <option value="1080">6:00 PM</option>
+            <option value="1140">7:00 PM</option>
+            <option value="1200">8:00 PM</option>
+            <option value="1260">9:00 PM</option>
+            <option value="1320">10:00 PM</option>
         </select>
         <label>Max Stores Per Week</label>
         <input type="number" id="maxpw" value="50" min="1" max="200">
@@ -261,7 +264,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.13.0";
+var APP_VERSION="v1.14.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -420,7 +423,18 @@ var allStores=[];
 var comp={};
 try{var ls0=localStorage.getItem("413comp");if(ls0)comp=JSON.parse(ls0)}catch(e){}
 function saveC(){try{localStorage.setItem("413comp",JSON.stringify(comp))}catch(e){}}
-function saveRouteLS(){try{localStorage.setItem("413route",JSON.stringify({curDays:curDays,legD:legD,ovnD:ovnD,allStores:allStores,tripsMeta:window.tripsMeta,uploadHeaders:window.uploadHeaders,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay,tripRest:window.tripRest}))}catch(e){}}
+function saveRouteLS(){
+    var payload={curDays:curDays,legD:legD,ovnD:ovnD,allStores:allStores,tripsMeta:window.tripsMeta,uploadHeaders:window.uploadHeaders,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay,tripRest:window.tripRest};
+    try{localStorage.setItem("413route",JSON.stringify(payload))}
+    catch(e){
+        // Likely storage quota (huge geometry). Retry without geometry so the session itself survives.
+        try{
+            var slim=JSON.parse(JSON.stringify(payload));
+            slim.curDays.forEach(function(d){delete d.geom});
+            localStorage.setItem("413route",JSON.stringify(slim));
+        }catch(e2){}
+    }
+}
 function loadRouteLS(){try{var r=localStorage.getItem("413route");if(!r)return null;return JSON.parse(r)}catch(e){return null}}
 
 var map=L.map("map",{zoomControl:false}).setView([38,-96],4);
@@ -590,17 +604,19 @@ function fetchTO(url,ms){
 function parallelLimit(items,limit,worker,done){
     if(items.length===0){done([]);return}
     var results=new Array(items.length);
-    var idx=0,active=0,completed=0;
+    var idx=0,active=0,completed=0,finished=false;
     function next(){
-        if(completed>=items.length){done(results);return}
+        if(finished)return;
+        if(completed>=items.length){finished=true;done(results);return}
         while(active<limit&&idx<items.length){
+            var i=idx;idx++;active++;   // reserve slot BEFORE invoking - sync callbacks can no longer double-run or skip items
             (function(i){
-                active++;
+                var called=false;       // each item completes exactly once, even if a worker misbehaves
                 worker(items[i],i,function(res){
+                    if(called)return;called=true;
                     results[i]=res;active--;completed++;next();
                 });
-            })(idx);
-            idx++;
+            })(i);
         }
     }
     next();
@@ -1197,7 +1213,7 @@ function redrawFromCurDays(callback){
             cb();
         });
     },function(){
-        drawConnectors(curDays);if(callback)callback();
+        drawConnectors(curDays);saveRouteLS();if(callback)callback();
     });
 }
 
@@ -1623,7 +1639,9 @@ function doLiveDayUpdate(){
         curDays.forEach(function(day){
             if(day.date===todayStr)return;
             var kept=day.stores.filter(function(st){return !keptSids[st.s[0]]});
-            if(kept.length>0)rebuilt.push({date:day.date,label:day.label,stores:kept,tripIdx:day.tripIdx});
+            // Keep cached road geometry only if the day is untouched; a changed store list invalidates it
+            var g=(kept.length===day.stores.length)?day.geom:undefined;
+            if(kept.length>0)rebuilt.push({date:day.date,label:day.label,stores:kept,tripIdx:day.tripIdx,geom:g});
         });
 
         var placedCount=todayDay.stores.length;
@@ -1764,7 +1782,7 @@ function restoreView(){
             drawnR++;statusEl.textContent="Drawing routes... "+drawnR+"/"+curDays.length;cb();
         });
     },function(){
-        drawConnectors(curDays);statusEl.style.display="none";document.getElementById("xbtn").style.display="block";document.getElementById("listBtn").style.display="block";showLegend();buildLeg(curDays);
+        drawConnectors(curDays);statusEl.style.display="none";document.getElementById("xbtn").style.display="block";document.getElementById("listBtn").style.display="block";showLegend();buildLeg(curDays);saveRouteLS();
     });
 }
 
