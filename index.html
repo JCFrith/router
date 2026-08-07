@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.15.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.16.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -266,7 +266,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.15.0";
+var APP_VERSION="v1.16.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -1626,8 +1626,11 @@ function doLiveDayUpdate(){
 
     // Pool: every not-yet-completed store currently anywhere in the visible schedule.
     // If nothing has been routed yet, fall back to the full uploaded list.
-    var pool=[];
+    var pool=[],hadSchedule=false;
     if(curDays.length>0){
+        hadSchedule=true;
+        // curDays is chronological and each day's stores are in visit order,
+        // so this pool preserves the planned visiting sequence exactly.
         curDays.forEach(function(day){day.stores.forEach(function(st){if(!comp[st.s[0]])pool.push(st.s)})});
     } else {
         pool=allStores.filter(function(s){return !comp[s[0]]});
@@ -1638,8 +1641,17 @@ function doLiveDayUpdate(){
         routingDone();lb.disabled=false;return;
     }
 
-    statusEl.textContent="Optimizing from your location...";
-    var ordered=optimizePath(pool,userLat,userLon,null,null);
+    var ordered;
+    if(hadSchedule){
+        // Follow the PLANNED order: today's remaining stops in sequence, then the next
+        // day's, and so on. No re-optimization - the plan is the route.
+        statusEl.textContent="Building today from your planned order...";
+        ordered=pool;
+    } else {
+        // No schedule exists yet - nothing to preserve, optimize from current position.
+        statusEl.textContent="Optimizing from your location...";
+        ordered=optimizePath(pool,userLat,userLon,null,null);
+    }
     var points=[[userLon,userLat]];
     ordered.forEach(function(s){points.push([s[4],s[3]])});
 
