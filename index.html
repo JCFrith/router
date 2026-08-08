@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.16.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.17.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -41,6 +41,15 @@
       window.sbDeleteRoute=async function(id){
         var res=await sbClient.from("routes").delete().eq("id",id);
         if(res.error)throw res.error;
+      };
+      window.sbInsertEvents=async function(rows){
+        try{
+          var u=(await sbClient.auth.getUser()).data.user;
+          if(!u)return false;
+          var payload=rows.map(function(r){return{store_id:String(r.store_id),action:r.action,actor:u.id,actor_email:u.email,lat:r.lat,lon:r.lon,created_at:r.at}});
+          var res=await sbClient.from("store_events").insert(payload);
+          return !res.error;
+        }catch(e){return false}
       };
       window.sbSignIn=async function(email,password){
         var res=await sbClient.auth.signInWithPassword({email:email,password:password});
@@ -266,7 +275,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.16.0";
+var APP_VERSION="v1.17.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -352,6 +361,7 @@ function showLogin(){document.getElementById("loginOverlay").style.display="flex
 function hideLogin(){document.getElementById("loginOverlay").style.display="none"}
 
 function onSignedIn(user){
+    setTimeout(flushEvents,500);
     authedUser=user;
     hideLogin();
     var su=document.getElementById("sUser");
@@ -539,10 +549,46 @@ document.addEventListener("click",function(e){
     var btn=e.target.closest(".cb");if(!btn)return;
     var sid=btn.getAttribute("data-sid");if(!sid)return;
     if(comp[sid])delete comp[sid];else comp[sid]=true;saveC();
+    recordEvent(sid,comp[sid]?"complete":"undo");
     var m=mkrs[sid];if(m){var d2=!!comp[sid];m.mk.setStyle({fillColor:d2?"#999":m.col,color:d2?"#666":"#fff",fillOpacity:d2?0.4:0.9});m.mk.getPopup().setContent(pp(m.dayIdx,sid,m.addr,m.city,m.idx,m.tot))}
     updInfo();
 });
 
+
+// ============================================================
+// LIVE COMPLETION EVENTS (offline-safe queue -> Supabase)
+// ============================================================
+function recordEvent(sid,action){
+    try{
+        var q=JSON.parse(localStorage.getItem("413evq")||"[]");
+        q.push({store_id:String(sid),action:action,at:new Date().toISOString(),
+                lat:(typeof userLat==="number"&&userLat!==null)?userLat:null,
+                lon:(typeof userLon==="number"&&userLon!==null)?userLon:null});
+        localStorage.setItem("413evq",JSON.stringify(q));
+    }catch(e){}
+    flushEvents();
+}
+var evFlushing=false;
+function flushEvents(){
+    if(evFlushing)return;
+    var q;try{q=JSON.parse(localStorage.getItem("413evq")||"[]")}catch(e){q=[]}
+    if(q.length===0)return;
+    if(!window.sbReady||!window.sbInsertEvents)return;
+    evFlushing=true;
+    var sending=q.slice();
+    window.sbInsertEvents(sending).then(function(ok){
+        if(ok){
+            try{
+                var cur=JSON.parse(localStorage.getItem("413evq")||"[]");
+                cur.splice(0,sending.length);
+                localStorage.setItem("413evq",JSON.stringify(cur));
+            }catch(e){}
+        }
+        evFlushing=false;
+    }).catch(function(){evFlushing=false});
+}
+setInterval(flushEvents,60000);
+window.addEventListener("online",flushEvents);
 function updInfo(){var done=0;allStores.forEach(function(s){if(comp[s[0]])done++});document.getElementById("rinfo").textContent=allStores.length?done+"/"+allStores.length+" completed, "+(allStores.length-done)+" remaining":""}
 
 // ============================================================
@@ -1946,6 +1992,7 @@ document.getElementById("listTable").addEventListener("change",function(e){
     var sid=cb.getAttribute("data-sid");if(!sid)return;
     if(cb.checked)comp[sid]=true;else delete comp[sid];
     saveC();
+    recordEvent(sid,comp[sid]?"complete":"undo");
     var m=mkrs[sid];if(m){var d2=!!comp[sid];m.mk.setStyle({fillColor:d2?"#999":m.col,color:d2?"#666":"#fff",fillOpacity:d2?0.4:0.9});m.mk.getPopup().setContent(pp(m.dayIdx,sid,m.addr,m.city,m.idx,m.tot))}
     updInfo();
     if(curDays.length)buildLeg(curDays);
