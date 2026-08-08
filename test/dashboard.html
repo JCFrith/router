@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- 413 Solution Live Dashboard v1.0.0 -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>413 Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+var SB_URL="https://jjitptktlzpyalwhvujv.supabase.co";
+var SB_KEY="sb_publishable_th-SXFYO8VwZNMFhzSrIAQ__PG8liIC";
+var sb=null;
+function initSB(){try{sb=window.supabase.createClient(SB_URL,SB_KEY);window.sbReady=true;window.dispatchEvent(new Event("sbready"))}catch(e){console.error(e)}}
+</script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:'Poppins',Arial,sans-serif;background:#3D464D}
+#map{position:absolute;top:52px;left:0;right:340px;bottom:0}
+#topbar{position:absolute;top:0;left:0;right:0;height:52px;background:#0A0A0A;color:#fff;display:flex;align-items:center;padding:0 16px;gap:12px;z-index:1200}
+#topbar .brand{font-weight:700;font-size:16px;color:#3B79B4;letter-spacing:1px}
+#topbar .sub{font-size:12px;color:#aaa}
+#liveDot{width:9px;height:9px;border-radius:50%;background:#666;margin-left:auto}
+#liveDot.on{background:#2E7D7B;box-shadow:0 0 6px #2E7D7B}
+#liveLbl{font-size:11px;color:#888}
+#side{position:absolute;top:52px;right:0;width:340px;bottom:0;background:#fff;overflow-y:auto;z-index:1100;padding:14px;border-left:3px solid #3B79B4}
+h3{margin:14px 0 6px;font-size:13px;color:#3D464D;text-transform:uppercase;letter-spacing:.5px}
+.statRow{display:flex;gap:8px}
+.stat{flex:1;background:#EDF4FB;border-radius:8px;padding:10px;text-align:center}
+.stat .n{font-size:22px;font-weight:700;color:#3B79B4}
+.stat .l{font-size:10px;color:#3D464D}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;color:#888;font-weight:600;padding:4px 6px;border-bottom:1px solid #eee}
+td{padding:4px 6px;border-bottom:1px solid #f4f4f4}
+#routeList label{display:block;font-size:12px;padding:5px 6px;border-bottom:1px solid #f4f4f4;cursor:pointer}
+#routeList input{margin-right:7px}
+#feed{font-size:11px}
+#feed .ev{padding:4px 6px;border-bottom:1px solid #f4f4f4}
+#feed .t{color:#888;margin-right:6px}
+#feed .undo{color:#c0392b}
+#feed .done{color:#2E7D7B;font-weight:600}
+button{background:#3B79B4;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',Arial,sans-serif}
+button:hover{background:#2C5F8F}
+#loginOverlay{position:fixed;inset:0;z-index:5000;background:rgba(10,10,10,.94);display:flex;align-items:center;justify-content:center}
+#loginCard{background:#fff;border-radius:10px;padding:28px;width:320px}
+#loginCard h2{margin:0 0 4px;color:#3B79B4;font-size:18px}
+#loginCard .s{font-size:11px;color:#888;margin-bottom:14px}
+#loginCard input{width:100%;padding:9px;margin-bottom:10px;border:1px solid #ccc;border-radius:6px;font-size:13px;font-family:'Poppins',Arial,sans-serif}
+#loginErr{color:#c0392b;font-size:11px;margin-top:8px;display:none}
+.lgd{position:absolute;bottom:12px;left:12px;z-index:1100;background:rgba(255,255,255,.93);border-radius:6px;padding:8px 12px;font-size:11px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+@media (max-width:760px){#map{right:0;bottom:45vh}#side{width:100%;top:auto;height:45vh;border-left:none;border-top:3px solid #3B79B4}}
+</style>
+</head>
+<body>
+<div id="topbar">
+    <span class="brand">413 SOLUTION</span><span class="sub">Live Field Dashboard</span>
+    <span id="liveDot"></span><span id="liveLbl">connecting</span>
+</div>
+<div id="map"></div>
+<div class="lgd"><span class="dot" style="background:#3B79B4"></span>Pending&nbsp;&nbsp;<span class="dot" style="background:#2E7D7B"></span>Completed</div>
+<div id="side">
+    <h3>This Week</h3>
+    <div class="statRow">
+        <div class="stat"><div class="n" id="wkDone">0</div><div class="l">COMPLETED</div></div>
+        <div class="stat"><div class="n" id="totDone">0</div><div class="l">ALL TIME</div></div>
+        <div class="stat"><div class="n" id="totStores">0</div><div class="l">IN VIEW</div></div>
+    </div>
+    <h3>By Tech</h3>
+    <table id="techTbl"><thead><tr><th>Tech</th><th>Week</th><th>Total</th></tr></thead><tbody></tbody></table>
+    <h3>Routes Shown</h3>
+    <div id="routeList" style="max-height:150px;overflow-y:auto"></div>
+    <div style="margin-top:8px;display:flex;gap:8px"><button id="applyBtn">Apply</button><button id="refreshBtn" style="background:#3D464D">Refresh</button></div>
+    <h3>Live Activity</h3>
+    <div id="feed"></div>
+</div>
+<div id="loginOverlay">
+    <div id="loginCard">
+        <h2>413 Dashboard</h2>
+        <div class="s">Sign in to view live field status</div>
+        <input id="em" type="email" placeholder="Email">
+        <input id="pw" type="password" placeholder="Password">
+        <button id="loginBtn" style="width:100%">Sign In</button>
+        <div id="loginErr"></div>
+    </div>
+</div>
+<script>
+// ============================================================
+// STATE
+// ============================================================
+var map=L.map("map",{preferCanvas:true,zoomControl:false}).setView([36.1,-86.7],6);
+L.control.zoom({position:"bottomright"}).addTo(map);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"&copy; OpenStreetMap"}).addTo(map);
+var routes=[];          // cloud route list rows
+var selected={};        // route id -> true
+var stores={};          // sid -> {sid,addr,city,lat,lon,mk}
+var events=[];          // full event log (ascending id)
+var lastId=0;
+var state={};           // sid -> {done:bool,at:iso,by:email}
+var realtimeOn=false;
+
+function mondayOfNow(){
+    var d=new Date();var day=d.getDay();var diff=(day===0?6:day-1);
+    d.setDate(d.getDate()-diff);d.setHours(0,0,0,0);return d;
+}
+
+// ============================================================
+// EVENT REDUCTION (latest event per store wins)
+// ============================================================
+function applyEvent(ev,silent){
+    if(ev.id<=lastId&&!silent)return;
+    if(ev.id>lastId)lastId=ev.id;
+    events.push(ev);
+    state[ev.store_id]={done:ev.action==="complete",at:ev.created_at,by:ev.actor_email||""};
+    if(!silent){refreshStats();restylePin(ev.store_id);feedPrepend(ev)}
+}
+function rebuildState(){
+    state={};
+    events.sort(function(a,b){return a.id-b.id});
+    events.forEach(function(ev){state[ev.store_id]={done:ev.action==="complete",at:ev.created_at,by:ev.actor_email||""}});
+    if(events.length)lastId=events[events.length-1].id;
+}
+
+// ============================================================
+// STATS + UI
+// ============================================================
+function refreshStats(){
+    var monday=mondayOfNow();
+    var inView=Object.keys(stores).length;
+    var done=0,wk=0;
+    Object.keys(stores).forEach(function(sid){
+        var st=state[sid];
+        if(st&&st.done){done++;if(new Date(st.at)>=monday)wk++}
+    });
+    document.getElementById("wkDone").textContent=wk;
+    document.getElementById("totDone").textContent=done;
+    document.getElementById("totStores").textContent=inView;
+    // per-tech: count completion events (current-state) grouped by email
+    var techs={};
+    Object.keys(state).forEach(function(sid){
+        var st=state[sid];
+        if(!st.done)return;
+        var t=st.by||"unknown";
+        techs[t]=techs[t]||{wk:0,tot:0};
+        techs[t].tot++;
+        if(new Date(st.at)>=monday)techs[t].wk++;
+    });
+    var tb=document.querySelector("#techTbl tbody");tb.innerHTML="";
+    Object.keys(techs).sort().forEach(function(t){
+        tb.innerHTML+="<tr><td>"+t.split("@")[0]+"</td><td>"+techs[t].wk+"</td><td>"+techs[t].tot+"</td></tr>";
+    });
+}
+function feedPrepend(ev){
+    var f=document.getElementById("feed");
+    var d=new Date(ev.created_at);
+    var t=(d.getMonth()+1)+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    var cls=ev.action==="complete"?"done":"undo";
+    var who=(ev.actor_email||"").split("@")[0];
+    f.innerHTML="<div class='ev'><span class='t'>"+t+"</span><span class='"+cls+"'>"+(ev.action==="complete"?"Completed":"Undid")+"</span> #"+ev.store_id+" <span class='t'>"+who+"</span></div>"+f.innerHTML;
+    while(f.children.length>25)f.removeChild(f.lastChild);
+}
+function restylePin(sid){
+    var s=stores[sid];if(!s||!s.mk)return;
+    var done=state[sid]&&state[sid].done;
+    s.mk.setStyle({fillColor:done?"#2E7D7B":"#3B79B4",fillOpacity:done?0.9:0.55,color:"#fff"});
+}
+
+// ============================================================
+// ROUTES -> STORE PINS
+// ============================================================
+function drawStores(){
+    Object.keys(stores).forEach(function(sid){if(stores[sid].mk)map.removeLayer(stores[sid].mk)});
+    stores={};
+    var bounds=[];
+    routes.forEach(function(r){
+        if(!selected[r.id]||!r.payload)return;
+        (r.payload.allStores||[]).forEach(function(s){
+            var sid=String(s[0]);
+            if(stores[sid])return; // dedupe across routes
+            var mk=L.circleMarker([s[3],s[4]],{radius:6,weight:1.5,color:"#fff",fillColor:"#3B79B4",fillOpacity:0.55}).addTo(map);
+            mk.bindPopup("<b>#"+sid+"</b><br>"+(s[1]||"")+"<br>"+(s[2]||""));
+            stores[sid]={sid:sid,lat:s[3],lon:s[4],mk:mk};
+            bounds.push([s[3],s[4]]);
+        });
+    });
+    Object.keys(stores).forEach(restylePin);
+    if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
+    refreshStats();
+}
+function renderRouteList(){
+    var rl=document.getElementById("routeList");rl.innerHTML="";
+    routes.forEach(function(r){
+        var d=new Date(r.created_at);
+        var lbl=r.name+" - "+(d.getMonth()+1)+"/"+d.getDate()+" ["+(r.created_by_email||"").split("@")[0]+"]";
+        rl.innerHTML+="<label><input type='checkbox' data-rid='"+r.id+"'"+(selected[r.id]?" checked":"")+">"+lbl+"</label>";
+    });
+}
+
+// ============================================================
+// DATA LOADING
+// ============================================================
+async function loadRoutes(){
+    var res=await sb.from("routes").select("id,name,created_at,created_by_email,data").order("created_at",{ascending:false});
+    if(res.error)throw res.error;
+    routes=res.data.map(function(r){
+        var p=null;try{p=JSON.parse(r.data)}catch(e){}
+        return {id:r.id,name:r.name,created_at:r.created_at,created_by_email:r.created_by_email,payload:p};
+    });
+    // default selection: newest full route (not week/trip slices) per user
+    var seen={};
+    routes.forEach(function(r){
+        if(!r.payload)return;
+        if(r.payload.isWeek||r.payload.isTrip)return;
+        var u=r.created_by_email||"?";
+        if(!seen[u]){seen[u]=true;selected[r.id]=true}
+    });
+    renderRouteList();
+}
+async function loadEvents(){
+    var res=await sb.from("store_events").select("*").order("id",{ascending:true}).limit(5000);
+    if(res.error)throw res.error;
+    events=res.data;
+    rebuildState();
+    var f=document.getElementById("feed");f.innerHTML="";
+    events.slice(-25).forEach(function(ev){feedPrepend(ev)});
+}
+async function pollNew(){
+    try{
+        var res=await sb.from("store_events").select("*").gt("id",lastId).order("id",{ascending:true});
+        if(!res.error&&res.data.length){res.data.forEach(function(ev){applyEvent(ev)})}
+    }catch(e){}
+}
+
+// ============================================================
+// REALTIME
+// ============================================================
+function startRealtime(){
+    try{
+        sb.channel("ev-live").on("postgres_changes",{event:"INSERT",schema:"public",table:"store_events"},function(payload){
+            applyEvent(payload.new);
+        }).subscribe(function(status){
+            realtimeOn=(status==="SUBSCRIBED");
+            document.getElementById("liveDot").className=realtimeOn?"on":"";
+            document.getElementById("liveLbl").textContent=realtimeOn?"live":"polling";
+        });
+    }catch(e){
+        document.getElementById("liveLbl").textContent="polling";
+    }
+}
+
+// ============================================================
+// AUTH + BOOT
+// ============================================================
+function showErr(m){var e=document.getElementById("loginErr");e.textContent=m;e.style.display="block"}
+async function boot(){
+    document.getElementById("loginOverlay").style.display="none";
+    try{
+        await loadRoutes();
+        await loadEvents();
+        drawStores();
+        startRealtime();
+        setInterval(pollNew,45000);
+    }catch(e){console.error(e);showErr("Load failed: "+(e.message||e));document.getElementById("loginOverlay").style.display="flex"}
+}
+document.getElementById("loginBtn").addEventListener("click",async function(){
+    try{
+        var res=await sb.auth.signInWithPassword({email:document.getElementById("em").value.trim(),password:document.getElementById("pw").value});
+        if(res.error){showErr(res.error.message);return}
+        boot();
+    }catch(e){showErr("Connection failed")}
+});
+document.getElementById("pw").addEventListener("keydown",function(e){if(e.key==="Enter")document.getElementById("loginBtn").click()});
+document.getElementById("applyBtn").addEventListener("click",function(){
+    document.querySelectorAll("#routeList input").forEach(function(cb){selected[cb.getAttribute("data-rid")]=cb.checked});
+    drawStores();
+});
+document.getElementById("refreshBtn").addEventListener("click",async function(){await loadRoutes();await loadEvents();drawStores()});
+window.addEventListener("sbready",async function(){
+    var u=(await sb.auth.getUser()).data.user;
+    if(u)boot();
+});
+initSB();
+</script>
+</body>
+</html>
