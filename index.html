@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.17.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.18.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -229,11 +229,6 @@
         <label style="display:flex;align-items:center;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0;font-weight:400;color:#3D464D;font-size:12px;cursor:pointer"><input type="checkbox" id="preserveOrder" style="width:auto;margin:0"> Preserve file order (skip optimize)</label>
         <button class="abtn" id="rbtn">Route It</button>
         <div class="sep"></div>
-        <div class="row2">
-            <button class="abtn" id="sbtn">Save Route</button>
-            <button class="abtn" id="ldbtn">Load Route</button>
-        </div>
-        <input type="file" id="routeIn" accept=".json" style="display:none">
         <div class="sep"></div>
         <label>Cloud Routes (shared)</label>
         <select id="cloudSel"><option value="">-- select a saved route --</option></select>
@@ -241,7 +236,12 @@
             <button class="abtn" id="cloadbtn">Load</button>
             <button class="abtn" id="cdelbtn">Delete</button>
         </div>
-        <button class="abtn" id="csavebtn" style="background:#2E7D7B;color:#fff;margin-top:6px">Save to Cloud</button>
+        <button class="abtn" id="csavebtn" style="background:#2E7D7B;color:#fff;margin-top:8px;padding:14px;font-size:15px;font-weight:700">Save to Cloud</button>
+        <div style="font-size:11px;color:#6B747B;line-height:1.35;margin-top:5px">This is the only way to save. Everyone signed in sees it.</div>
+        <div class="sep"></div>
+        <button class="abtn" id="ldbtn" style="background:#fff;color:#3D464D;border:1px solid #D6DADD">Load Backup File</button>
+        <input type="file" id="routeIn" accept=".json" style="display:none">
+        <div style="font-size:11px;color:#6B747B;line-height:1.35;margin-top:5px">Opens an older .json route file from your device. Load it, then Save to Cloud to share it.</div>
         <button class="abtn" id="clrbtn" style="background:#fff;color:#c0392b;border:1px solid #c0392b!important;margin-top:6px">Clear Route</button>
         <div class="sep"></div>
         <label>Trips (group weeks, fly round-trip)</label>
@@ -275,7 +275,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.17.0";
+var APP_VERSION="v1.18.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -1796,14 +1796,7 @@ document.getElementById("rbtn").addEventListener("click",function(){
 // ============================================================
 // SAVE / LOAD ROUTE FILES
 // ============================================================
-document.getElementById("sbtn").addEventListener("click",function(){
-    if(curDays.length===0){alert("No route to save. Route something first.");return}
-    var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
-    if(!name)return;
-    var data={name:name,saved:new Date().toISOString(),version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay,tripRest:window.tripRest,uploadHeaders:window.uploadHeaders};
-    var blob=new Blob([JSON.stringify(data)],{type:"application/json"});
-    var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name.replace(/[^a-z0-9_\-]/gi,"_")+".json";a.click();
-});
+
 
 document.getElementById("ldbtn").addEventListener("click",function(){document.getElementById("routeIn").click()});
 document.getElementById("routeIn").addEventListener("change",function(e){
@@ -2048,18 +2041,32 @@ function refreshCloudList(){
 
 document.getElementById("csavebtn").addEventListener("click",function(){
     if(!window.sbReady){alert("Cloud not connected yet. Wait a moment and try again.");return}
+    // Cloud is now the only save path, so not being signed in means no way to save at all.
+    // Say so plainly instead of letting the write fail with a permissions error.
+    if(!authedUser){
+        setCloudStat("Not signed in","#f44336");
+        alert("You are not signed in, so this route cannot be saved.\n\nReload the page and sign in, then route and save again.");
+        return;
+    }
     if(curDays.length===0){alert("No route to save. Route something first.");return}
     var name=prompt("Route name:","413_Route_"+new Date().toISOString().slice(0,10));
     if(!name)return;
+    var cs=document.getElementById("csavebtn");
+    cs.disabled=true;cs.textContent="Saving...";
     setCloudStat("Saving...","#888");
     var payload={version:APP_VERSION,allStores:allStores,curDays:curDays,legD:legD,ovnD:ovnD,comp:comp,tripsMeta:window.tripsMeta,tripAnchors:window.tripAnchors,tripOneWay:window.tripOneWay,tripRest:window.tripRest,uploadHeaders:window.uploadHeaders};
     window.sbSaveRoute(name,payload).then(function(id){
-        setCloudStat("Saved to cloud","#4caf50");
+        cs.disabled=false;cs.textContent="Save to Cloud";
+        setCloudStat('Saved to cloud as "'+name+'"',"#4caf50");
         refreshCloudList();
+        // Confirm by name so nobody is left guessing whether it landed.
+        alert('Saved to the cloud as "'+name+'".\n\nEveryone signed in can now load it.');
     }).catch(function(err){
+        cs.disabled=false;cs.textContent="Save to Cloud";
         console.error("Cloud save error:",err);
-        setCloudStat("Save failed: "+err.message,"#f44336");
-        alert("Cloud save failed: "+err.message);
+        var m=err&&err.message?err.message:"unknown error";
+        setCloudStat("Save failed: "+m,"#f44336");
+        alert("Cloud save FAILED. This route was not saved.\n\n"+m+"\n\nStay on this page, check your signal, and try again.");
     });
 });
 
