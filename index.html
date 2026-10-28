@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 413 Route Planner v1.18.0 | build 2026-07-15 -->
+<!-- 413 Route Planner v1.19.0 | build 2026-07-15 -->
 <html>
 <head>
     <title>413 Solution - Route Planner</title>
@@ -73,6 +73,11 @@
         .pd{margin:3px 0;font-size:0.9em;color:#555} .hl{color:#222;font-weight:bold}
         .ov{background:#EDF4FB;border:1px solid #B5D4F4;border-radius:4px;padding:5px 8px;margin:6px 0;font-size:0.85em;color:#3B79B4} .ov b{color:#222}
         .cb{display:inline-block;padding:5px 14px;margin-top:8px;border-radius:5px;border:1px solid #3B79B4;font-size:0.85em;font-weight:600;cursor:pointer;background:#fff;color:#3B79B4}
+        .nav1{display:inline-block;padding:5px 14px;margin-top:8px;margin-right:6px;border-radius:5px;border:1px solid #2E7D7B;font-size:0.85em;font-weight:600;cursor:pointer;background:#fff;color:#2E7D7B}
+        .nav1:hover{background:#E4F0EF}
+        .navnext{display:block;width:100%;box-sizing:border-box;text-align:center;padding:10px 14px;margin-top:8px;border-radius:5px;border:0;font-size:0.95em;font-weight:700;cursor:pointer;background:#2E7D7B;color:#fff}
+        .navnext:active{background:#246360}
+        .navnext.last{background:#3D464D}
         .cb:hover{background:#EDF4FB} .cb.dn{background:#3D464D;color:#fff;border-color:#3D464D}
         .lg{position:absolute;top:64px;right:10px;z-index:1000;background:rgba(255,255,255,.93);border-radius:6px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,.12);border:1px solid #ddd;font-size:12px;line-height:1.8;max-height:90vh;overflow-y:auto;display:none}
         .lg-t{font-weight:600;font-family:'Poppins',Arial,sans-serif;color:#3B79B4;font-size:13px;margin-bottom:4px;border-bottom:1px solid #e0e0e0;padding-bottom:3px}
@@ -275,7 +280,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-var APP_VERSION="v1.18.0";
+var APP_VERSION="v1.19.0";
 var APP_BUILD="2026-07-15";
 document.addEventListener("DOMContentLoaded",function(){
     var vb=document.getElementById("verBadge");if(vb)vb.textContent=APP_VERSION;
@@ -519,17 +524,64 @@ function nextDayAny(d){var dt=new Date(d+"T12:00:00");dt.setDate(dt.getDate()+1)
 function mondayOf(d){var dt=new Date(d+"T12:00:00");var day=dt.getDay();var diff=(day===0)?-6:1-day;dt.setDate(dt.getDate()+diff);return dt.toISOString().slice(0,10)}
 function nextMonday(d){var dt=new Date(d+"T12:00:00");dt.setDate(dt.getDate()+((8-dt.getDay())%7||7));return dt.toISOString().slice(0,10)}
 
+// ============================================================
+// NAVIGATION HANDOFF (Apple Maps on iOS/Mac, Google Maps elsewhere)
+// ============================================================
+function isApplePlatform(){
+    try{
+        var ua=navigator.userAgent||"";
+        if(/iPhone|iPad|iPod/i.test(ua))return true;
+        if(/Macintosh/i.test(ua))return true;           // Mac, incl. iPad requesting desktop site
+        if(navigator.platform&&/Mac|iPhone|iPad|iPod/i.test(navigator.platform))return true;
+    }catch(e){}
+    return false;
+}
+function mapsUrl(lat,lon){
+    // Coordinates, not addresses: these are the surveyed positions and never geocode wrong.
+    // Digits, minus, period and comma are all URL-safe, and both Apple and Google
+    // document a literal comma between lat and lon. No encoding needed.
+    var c=Number(lat)+","+Number(lon);
+    if(isApplePlatform())return "https://maps.apple.com/directions?destination="+c+"&mode=driving";
+    return "https://www.google.com/maps/dir/?api=1&destination="+c+"&travelmode=driving";
+}
+function openMaps(lat,lon){
+    var u=mapsUrl(lat,lon);
+    // Must run synchronously inside the click, or iOS blocks it as a popup.
+    var w=null;
+    try{w=window.open(u,"_blank")}catch(e){}
+    if(!w)location.href=u;
+}
+// Next uncompleted store AFTER this one, within the same day. null at end of day.
+function nextStop(sid){
+    var m=mkrs[sid];
+    if(!m||m.dayIdx===undefined||m.dayIdx<0)return null;
+    var day=curDays[m.dayIdx];
+    if(!day)return null;
+    for(var i=m.idx+1;i<day.stores.length;i++){
+        var s=day.stores[i].s;
+        if(!comp[s[0]])return {sid:s[0],lat:s[3],lon:s[4],city:s[2],addr:s[1]};
+    }
+    return null;
+}
+
 function pp(dayIdx,sid,addr,city,idx,tot){
     var done=!!comp[sid];
     if(dayIdx===undefined||dayIdx<0||!curDays[dayIdx]){
-        return "<div><div class='pt'>Not in current route</div><div class='pd'>Store #: <span class='hl'>"+sid+"</span></div><div class='pd'>"+addr+"<br>"+city+"</div><div class='"+(done?"cb dn":"cb")+"' data-sid='"+sid+"'>"+(done?"COMPLETED - UNDO?":"MARK COMPLETE")+"</div></div>";
+        return "<div><div class='pt'>Not in current route</div><div class='pd'>Store #: <span class='hl'>"+sid+"</span></div><div class='pd'>"+addr+"<br>"+city+"</div><div class='"+(done?"cb dn":"cb")+"' data-sid='"+sid+"'>"+(done?"COMPLETED - UNDO?":"MARK COMPLETE")+"</div><div class='nav1' data-nav='"+sid+"'>DIRECTIONS</div></div>";
     }
     var day=curDays[dayIdx],lbl=day.label||"",ld=legD[sid]||{};
     var arr=ld.arrival||"",dep=ld.departure||"",drv="";
     if(idx===0){var o=ovnD["f_"+sid];if(o)drv="<div class='ov'>"+o.type+" from <b>"+o.fr+"</b><br>"+o.dt+" ("+o.mi+" mi)</div>";else drv="<div class='pd' style='color:#3B79B4'>First store of day</div>"}
     else if(ld.minutes!==undefined)drv="<div class='pd'>Transit from Prev: <span class='hl'>"+ld.minutes+" min</span> ("+ld.miles+" mi)</div>";
     var eod="";if(idx===tot-1&&ovnD[sid]){var o2=ovnD[sid];eod="<div class='ov'>Tonight to <b>"+o2.to+"</b><br>"+o2.dt+" ("+o2.mi+" mi)</div>"}
-    return "<div><div class='pt'>"+lbl+" - Stop "+(idx+1)+"/"+tot+"</div><div class='pd'>Store #: <span class='hl'>"+sid+"</span></div><div class='pd'>"+addr+"<br>"+city+"</div><br/>"+(arr?"<div class='pd'>Arrival: <span class='hl'>"+arr+"</span></div>":"")+(dep?"<div class='pd'>Departure: <span class='hl'>"+dep+"</span></div>":"")+drv+eod+"<div class='"+(done?"cb dn":"cb")+"' data-sid='"+sid+"'>"+(done?"COMPLETED - UNDO?":"MARK COMPLETE")+"</div></div>";
+    return "<div><div class='pt'>"+lbl+" - Stop "+(idx+1)+"/"+tot+"</div><div class='pd'>Store #: <span class='hl'>"+sid+"</span></div><div class='pd'>"+addr+"<br>"+city+"</div><br/>"+(arr?"<div class='pd'>Arrival: <span class='hl'>"+arr+"</span></div>":"")+(dep?"<div class='pd'>Departure: <span class='hl'>"+dep+"</span></div>":"")+drv+eod+"<div class='"+(done?"cb dn":"cb")+"' data-sid='"+sid+"'>"+(done?"COMPLETED - UNDO?":"MARK COMPLETE")+"</div><div class='nav1' data-nav='"+sid+"'>DIRECTIONS</div>"+nextBtn(sid)+"</div>";
+}
+
+// The one-tap field button: marks this store done and routes to the next one.
+function nextBtn(sid){
+    var n=nextStop(sid);
+    if(!n)return "<div class='navnext last' data-last='"+sid+"'>DONE &middot; LAST STOP OF DAY</div>";
+    return "<div class='navnext' data-next='"+sid+"'>DONE &rarr; NAVIGATE TO #"+n.sid+"</div>";
 }
 
 function placePins(){
@@ -540,10 +592,47 @@ function placePins(){
         var d2=!!comp[sid];
         var mk=L.circleMarker([lat,lon],{radius:7,fillColor:d2?"#999":"#aaa",color:d2?"#666":"#fff",weight:2,opacity:1,fillOpacity:d2?0.4:0.6}).addTo(map);
         mk.bindPopup(function(){var m=mkrs[sid];return pp(m.dayIdx,sid,addr,city,m.idx,m.tot)});
-        mkrs[sid]={mk:mk,col:"#aaa",dayIdx:-1,addr:addr,city:city,idx:0,tot:0};
+        mkrs[sid]={mk:mk,col:"#aaa",dayIdx:-1,addr:addr,city:city,idx:0,tot:0,lat:lat,lon:lon};
     });
     if(allB.length)map.fitBounds(allB,{padding:[30,30]});
 }
+
+// Force a store complete (not a toggle) and sync everything the toggle syncs.
+function markComplete(sid){
+    if(!comp[sid]){
+        comp[sid]=true;saveC();
+        recordEvent(sid,"complete");
+    }
+    var m=mkrs[sid];
+    if(m){
+        m.mk.setStyle({fillColor:"#999",color:"#666",fillOpacity:0.4});
+        m.mk.getPopup().setContent(pp(m.dayIdx,sid,m.addr,m.city,m.idx,m.tot));
+        m.mk.closePopup();
+    }
+    updInfo();
+}
+
+document.addEventListener("click",function(e){
+    // DIRECTIONS to this store
+    var nb=e.target.closest("[data-nav]");
+    if(nb){
+        var ns=nb.getAttribute("data-nav"),nm=mkrs[ns];
+        if(nm)openMaps(nm.lat,nm.lon);
+        return;
+    }
+    // DONE then NAVIGATE to the next stop. Open Maps FIRST, synchronously,
+    // or iOS treats it as a popup and silently blocks it.
+    var xb=e.target.closest("[data-next]");
+    if(xb){
+        var xs=xb.getAttribute("data-next"),nx=nextStop(xs);
+        if(nx)openMaps(nx.lat,nx.lon);
+        markComplete(xs);
+        return;
+    }
+    // Last stop of the day: mark done, nowhere to navigate.
+    var lb=e.target.closest("[data-last]");
+    if(lb){markComplete(lb.getAttribute("data-last"));return}
+});
 
 document.addEventListener("click",function(e){
     var btn=e.target.closest(".cb");if(!btn)return;
