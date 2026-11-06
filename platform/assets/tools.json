@@ -18,8 +18,12 @@
     "description": "Live view of saved routes and completed stores across all crews.",
     "icon": "📍",
     "path": "/tools/field-dashboard.html",
-    "adminOnly": true,
-    "status": "live"
+    "status": "live",
+    "roles": [
+      "owner",
+      "admin",
+      "user"
+    ]
   },
   {
     "id": "field-log",
@@ -51,11 +55,7 @@
     "description": "Placeholder showing where the next internal tool plugs in.",
     "icon": "🧩",
     "path": "/tools/next-tool.html",
-    "roles": [
-      "owner",
-      "admin",
-      "user"
-    ],
-    "status": "coming-soon"
+    "status": "coming-soon",
+    "adminOnly": true
   }
 ]
