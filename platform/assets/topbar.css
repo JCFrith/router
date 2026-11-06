@@ -1,0 +1,31 @@
+/* Shared top bar and brand variables. Loaded by every protected page, including tools. */
+:root{
+  --brand-name:"413 Solution";
+  --c-bar:#2B3238;          /* top bar */
+  --c-bar-text:#FFFFFF;
+  --c-primary:#3B79B4;      /* 413 blue */
+  --c-primary-dark:#2E6194;
+  --c-text:#2B3238;
+  --c-muted:#6B7680;
+  --c-bg:#F3F5F7;
+  --c-surface:#FFFFFF;
+  --c-border:#DDE2E7;
+  --c-danger:#B23B3B;
+  --c-ok:#2E7D5B;
+  --c-warn-bg:#FFF6E0;
+  --font:'Poppins',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  --radius:8px;
+  --topbar-h:56px;
+}
+/* Top bar */
+#topbar{position:sticky;top:0;box-sizing:border-box;font-family:var(--font);font-size:15px;line-height:1.45;z-index:6000;height:var(--topbar-h);background:var(--c-bar);color:var(--c-bar-text);display:flex;align-items:center;gap:14px;padding:0 16px}
+#topbar a{color:var(--c-bar-text);text-decoration:none}
+#topbar .brand{display:flex;align-items:center;gap:10px;font-weight:600;white-space:nowrap;margin-right:auto;min-width:0}
+#topbar .brand img{width:30px;height:30px;background:#fff;border-radius:6px;padding:2px}
+#topbar .who{max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;opacity:.92}
+#topbar .who:hover,#topbar .adminlink:hover{text-decoration:underline}
+#topbar .adminlink{font-size:14px}
+#topbar button{background:transparent;color:var(--c-bar-text);border:1px solid rgba(255,255,255,.45);border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer}
+#topbar button:hover{background:rgba(255,255,255,.1)}
+@media (max-width:560px){#topbar{gap:10px;padding:0 10px}#topbar .brand span{display:none}#topbar .who{max-width:38vw}}
+

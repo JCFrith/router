@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/logo.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/topbar.css"><link rel="stylesheet" href="/assets/styles.css"><script src="/assets/vendor/supabase.js"></script>
+<script src="/assets/auth.js" data-page="public"></script>
+<title>Sign in · 413 Solution Tools</title></head>
+<body>
+<div class="authpage"><div class="authbox">
+  <div class="logo"><img src="/assets/logo.png" alt="">413 Solution Tools</div>
+  <form id="f" novalidate>
+    <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required></div>
+    <div id="msg" class="msg err"></div>
+    <button class="btn" id="go" type="submit">Sign in</button>
+  </form>
+  <p class="small" style="margin-top:16px"><a href="#" id="forgot">Forgot password</a></p>
+  <div id="fmsg" class="msg"></div>
+</div></div>
+<script>
+(function(){
+  var msg=document.getElementById('msg'), fmsg=document.getElementById('fmsg'), go=document.getElementById('go');
+  function show(el,t,cls){el.textContent=t;el.className='msg show '+(cls||'err');}
+  function nextUrl(){var n=new URLSearchParams(location.search).get('next');return n&&n.charAt(0)==='/'&&n.charAt(1)!=='/'?n:'/';}
+  Platform.ready.then(function(P){
+    P.sb.auth.getSession().then(function(s){if(s.data.session)location.replace(nextUrl());});
+    document.getElementById('f').addEventListener('submit',function(e){
+      e.preventDefault(); msg.className='msg';
+      var email=document.getElementById('email').value.trim(), pw=document.getElementById('pw').value;
+      if(!email||!pw){show(msg,'Enter your email and password.');return;}
+      go.disabled=true; go.textContent='Signing in...';
+      P.sb.auth.signInWithPassword({email:email,password:pw}).then(function(r){
+        if(r.error){
+          var m=String(r.error.message||'');
+          if(/banned/i.test(m)) show(msg,'This account is disabled. Contact an administrator.');
+          else if(/invalid login/i.test(m)) show(msg,'Email or password is incorrect.');
+          else show(msg,m||'Sign in failed.');
+          go.disabled=false; go.textContent='Sign in'; return;
+        }
+        location.replace(nextUrl());
+      });
+    });
+    document.getElementById('forgot').addEventListener('click',function(e){
+      e.preventDefault();
+      var email=document.getElementById('email').value.trim();
+      if(!email){show(fmsg,'Enter your email above, then click Forgot password.','warn');return;}
+      P.sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/reset.html'}).then(function(r){
+        if(r.error) show(fmsg,r.error.message||'Could not send the email.');
+        else show(fmsg,'If that address has an account, a reset link is on its way.','ok');
+      });
+    });
+  }).catch(function(e){show(msg,'Could not reach the sign-in service. '+e.message);});
+})();
+</script>
+</body></html>

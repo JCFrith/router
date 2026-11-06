@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/logo.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/topbar.css"><link rel="stylesheet" href="/assets/styles.css"><script src="/assets/vendor/supabase.js"></script>
+<script src="/assets/auth.js"></script>
+<title>Admin · 413 Solution Tools</title></head>
+<body data-roles="owner,admin">
+<header id="topbar"></header>
+<main class="wrap stack">
+  <div><h1>User management</h1>
+  <p class="muted small">Role changes take effect on the user's next sign-in. Every action here is recorded in the audit log.</p></div>
+
+  <form class="card" id="af" novalidate>
+    <h2>Add user</h2>
+    <div class="row3">
+      <div class="field"><label for="nemail">Email</label><input id="nemail" type="email" autocomplete="off"></div>
+      <div class="field"><label for="nname">Name</label><input id="nname" autocomplete="off" maxlength="200"></div>
+      <div class="field"><label for="nrole">Role</label><select id="nrole"><option value="user">User</option></select></div>
+    </div>
+    <div class="field"><label for="nmode">Sign-in method</label>
+      <select id="nmode"><option value="temp">Generate a temporary password (shown once)</option><option value="email">Email a set-password link</option></select></div>
+    <div id="amsg" class="msg"></div>
+    <button class="btn" id="asave" type="submit">Add user</button>
+  </form>
+
+  <div class="card">
+    <div class="toolbar"><input id="q" type="search" placeholder="Search name or email"><span class="muted small" id="count"></span></div>
+    <div id="lmsg" class="msg"></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="sortable" id="sortName">Name ▲</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Last sign-in</th><th>Actions</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="muted">Loading...</td></tr></tbody>
+    </table></div>
+  </div>
+</main>
+
+<div class="modal" id="m"><div class="box" id="mbox"></div></div>
+
+<script>
+Platform.ready.then(function(P){
+  var esc=P.esc, users=[], me=null, myRole=P.role, asc=true;
+  var modal=document.getElementById('m'), mbox=document.getElementById('mbox');
+  function show(id,t,cls){var el=document.getElementById(id);el.textContent=t;el.className='msg show '+cls;}
+  function hide(id){document.getElementById(id).className='msg';}
+  function fmt(d){if(!d)return '—';var x=new Date(d);return x.toLocaleDateString()+' '+x.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});}
+  function closeModal(){modal.classList.remove('open');mbox.innerHTML='';}
+  modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
+
+  if(myRole==='owner'){document.getElementById('nrole').insertAdjacentHTML('beforeend','<option value="admin">Admin</option>');}
+
+  function canManage(u){ if(u.id===me)return true; if(u.role==='user')return true; return myRole==='owner'; }
+  function owners(){return users.filter(function(u){return u.role==='owner';}).length;}
+
+  function render(){
+    var q=document.getElementById('q').value.trim().toLowerCase();
+    var list=users.filter(function(u){return !q||(u.name||'').toLowerCase().indexOf(q)!==-1||u.email.toLowerCase().indexOf(q)!==-1;});
+    list.sort(function(a,b){var x=(a.name||a.email).toLowerCase(),y=(b.name||b.email).toLowerCase();return (x<y?-1:x>y?1:0)*(asc?1:-1);});
+    document.getElementById('sortName').textContent='Name '+(asc?'▲':'▼');
+    document.getElementById('count').textContent=list.length+' of '+users.length+' users';
+    document.getElementById('rows').innerHTML=list.map(function(u){
+      var a=[], self=u.id===me;
+      if(canManage(u)){
+        a.push('<button class="btn sm secondary" data-act="reset" data-id="'+u.id+'">Reset password</button>');
+        if(!self) a.push(u.status==='disabled'
+          ?'<button class="btn sm secondary" data-act="enable" data-id="'+u.id+'">Enable</button>'
+          :'<button class="btn sm secondary" data-act="disable" data-id="'+u.id+'">Disable</button>');
+      }
+      if(!self && u.role!=='owner' && (u.role==='user'||myRole==='owner')) a.push('<button class="btn sm danger" data-act="remove" data-id="'+u.id+'">Remove</button>');
+      var role=myRole==='owner'
+        ?'<select data-act="role" data-id="'+u.id+'" style="width:auto;padding:4px 6px;font-size:13px">'+['owner','admin','user'].map(function(r){return '<option value="'+r+'"'+(r===u.role?' selected':'')+'>'+r.charAt(0).toUpperCase()+r.slice(1)+'</option>';}).join('')+'</select>'
+        :'<span class="pill '+u.role+'">'+u.role+'</span>';
+      return '<tr><td>'+esc(u.name||'—')+(self?' <span class="muted small">(you)</span>':'')+'</td><td>'+esc(u.email)+'</td><td>'+role+'</td>'+
+        '<td><span class="pill '+u.status+'">'+u.status+'</span></td><td>'+fmt(u.created_at)+'</td><td>'+fmt(u.last_sign_in_at)+'</td>'+
+        '<td class="actions">'+(a.join('')||'<span class="muted small">No actions</span>')+'</td></tr>';
+    }).join('')||'<tr><td colspan="7" class="muted">No users match.</td></tr>';
+  }
+
+  function load(){
+    return P.api('/api/admin/users').then(function(d){users=d.users;me=d.callerId;myRole=d.callerRole;hide('lmsg');render();})
+      .catch(function(e){show('lmsg','Could not load users: '+e.message,'err');});
+  }
+
+  function secretBox(title,email,pw){
+    mbox.innerHTML='<h2>'+esc(title)+'</h2><p class="small">Temporary password for <b>'+esc(email)+'</b>. It is shown once. Send it through a private channel. The user will be asked to change it at first sign-in.</p>'+
+      '<div class="secret" id="sec">'+esc(pw)+'</div><div class="toolbar"><button class="btn" id="cp">Copy</button><button class="btn secondary" id="done">Done</button></div><div id="cpm" class="msg"></div>';
+    modal.classList.add('open');
+    document.getElementById('cp').onclick=function(){
+      (navigator.clipboard?navigator.clipboard.writeText(pw):Promise.reject()).then(function(){show('cpm','Copied.','ok');},function(){
+        var r=document.createRange();r.selectNodeContents(document.getElementById('sec'));var s=getSelection();s.removeAllRanges();s.addRange(r);show('cpm','Selected. Press Ctrl/Cmd+C to copy.','warn');});
+    };
+    document.getElementById('done').onclick=closeModal;
+  }
+
+  document.getElementById('q').addEventListener('input',render);
+  document.getElementById('sortName').addEventListener('click',function(){asc=!asc;render();});
+
+  document.getElementById('af').addEventListener('submit',function(e){
+    e.preventDefault();hide('amsg');
+    var body={email:document.getElementById('nemail').value.trim(),full_name:document.getElementById('nname').value.trim(),role:document.getElementById('nrole').value,mode:document.getElementById('nmode').value};
+    if(!body.email)return show('amsg','Enter an email.','err');
+    var b=document.getElementById('asave');b.disabled=true;
+    P.api('/api/admin/users',{method:'POST',body:body}).then(function(d){
+      document.getElementById('af').reset();
+      if(d.tempPassword) secretBox('User created',d.email,d.tempPassword);
+      else if(d.emailSent) show('amsg','User created. A set-password email was sent to '+d.email+'.','ok');
+      else show('amsg','User created, but the email could not be sent: '+(d.emailError||'unknown error')+'. Use Reset password to generate a temporary password.','warn');
+      return load();
+    }).catch(function(e){show('amsg','Could not add user: '+e.message,'err');}).then(function(){b.disabled=false;});
+  });
+
+  document.getElementById('rows').addEventListener('change',function(e){
+    var s=e.target; if(s.getAttribute('data-act')!=='role')return;
+    var u=users.filter(function(x){return x.id===s.getAttribute('data-id');})[0];
+    var nr=s.value;
+    if(!confirm('Change '+u.email+' from '+u.role+' to '+nr+'? This takes effect on their next sign-in.')){s.value=u.role;return;}
+    P.api('/api/admin/role',{method:'POST',body:{id:u.id,role:nr}}).then(function(){show('lmsg','Role updated for '+u.email+'.','ok');return load();})
+      .catch(function(err){s.value=u.role;show('lmsg','Role change failed: '+err.message,'err');});
+  });
+
+  document.getElementById('rows').addEventListener('click',function(e){
+    var b=e.target.closest('button[data-act]'); if(!b)return;
+    var act=b.getAttribute('data-act'), u=users.filter(function(x){return x.id===b.getAttribute('data-id');})[0];
+    if(act==='disable'||act==='enable'){
+      if(act==='disable'&&!confirm('Disable '+u.email+'? They will not be able to sign in. No data is deleted.'))return;
+      b.disabled=true;
+      P.api('/api/admin/status',{method:'POST',body:{id:u.id,disabled:act==='disable'}}).then(function(){show('lmsg',u.email+' '+(act==='disable'?'disabled':'enabled')+'.','ok');return load();})
+        .catch(function(err){b.disabled=false;show('lmsg','Failed: '+err.message,'err');});
+    }
+    if(act==='reset'){
+      mbox.innerHTML='<h2>Reset password</h2><p class="small">'+esc(u.email)+'</p><div class="stack"><button class="btn" id="rt">Generate temporary password</button><button class="btn secondary" id="re">Send recovery email</button><button class="btn secondary" id="rc">Cancel</button></div><div id="rm" class="msg"></div>';
+      modal.classList.add('open');
+      document.getElementById('rc').onclick=closeModal;
+      document.getElementById('rt').onclick=function(){this.disabled=true;
+        P.api('/api/admin/reset',{method:'POST',body:{id:u.id,mode:'temp'}}).then(function(d){secretBox('Password reset',u.email,d.tempPassword);})
+          .catch(function(err){show('rm',err.message,'err');});};
+      document.getElementById('re').onclick=function(){this.disabled=true;
+        P.api('/api/admin/reset',{method:'POST',body:{id:u.id,mode:'email'}}).then(function(){show('rm','Recovery email sent to '+u.email+'.','ok');})
+          .catch(function(err){show('rm',err.message,'err');});};
+    }
+    if(act==='remove'){
+      mbox.innerHTML='<h2>Remove user</h2><p class="small">This permanently deletes the sign-in account and profile for <b>'+esc(u.email)+'</b>. Type the email to confirm.</p>'+
+        '<div class="field"><input id="ce" autocomplete="off" placeholder="'+esc(u.email)+'"></div><div class="toolbar"><button class="btn danger" id="cr" disabled>Remove permanently</button><button class="btn secondary" id="cc">Cancel</button></div><div id="cm" class="msg"></div>';
+      modal.classList.add('open');
+      var ce=document.getElementById('ce'), cr=document.getElementById('cr'); ce.focus();
+      ce.oninput=function(){cr.disabled=ce.value.trim().toLowerCase()!==u.email.toLowerCase();};
+      document.getElementById('cc').onclick=closeModal;
+      cr.onclick=function(){cr.disabled=true;
+        P.api('/api/admin/remove',{method:'POST',body:{id:u.id,confirmEmail:ce.value.trim()}}).then(function(){closeModal();show('lmsg',u.email+' removed.','ok');return load();})
+          .catch(function(err){cr.disabled=false;show('cm',err.message,'err');});};
+    }
+  });
+
+  load();
+});
+</script>
+</body></html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/logo.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/topbar.css"><link rel="stylesheet" href="/assets/styles.css"><script src="/assets/vendor/supabase.js"></script>
+<script src="/assets/auth.js" data-page="public"></script>
+<title>Set password · 413 Solution Tools</title></head>
+<body>
+<div class="authpage"><div class="authbox">
+  <div class="logo"><img src="/assets/logo.png" alt="">Set a new password</div>
+  <p id="wait" class="muted small">Checking your reset link...</p>
+  <form id="f" novalidate style="display:none">
+    <div class="field"><label for="p1">New password (12 characters minimum)</label><input id="p1" type="password" autocomplete="new-password" minlength="12"></div>
+    <div class="field"><label for="p2">Confirm new password</label><input id="p2" type="password" autocomplete="new-password" minlength="12"></div>
+    <div id="msg" class="msg"></div>
+    <button class="btn" id="go" type="submit">Save password</button>
+  </form>
+  <p class="small" style="margin-top:16px"><a href="/login.html">Back to sign in</a></p>
+</div></div>
+<script>
+(function(){
+  var msg=document.getElementById('msg'), f=document.getElementById('f'), wait=document.getElementById('wait');
+  function show(t,cls){msg.textContent=t;msg.className='msg show '+(cls||'err');}
+  Platform.ready.then(function(P){
+    var shown=false;
+    function ready(){if(shown)return;shown=true;wait.style.display='none';f.style.display='block';}
+    P.sb.auth.onAuthStateChange(function(ev,session){if(session&&(ev==='PASSWORD_RECOVERY'||ev==='SIGNED_IN'||ev==='INITIAL_SESSION'))ready();});
+    P.sb.auth.getSession().then(function(s){
+      if(s.data.session) ready();
+      else setTimeout(function(){if(!shown)wait.textContent='This reset link is invalid or has expired. Request a new one from the sign-in page.';},2500);
+    });
+    f.addEventListener('submit',function(e){
+      e.preventDefault();
+      var a=document.getElementById('p1').value,b=document.getElementById('p2').value;
+      if(a.length<12)return show('Password must be at least 12 characters.');
+      if(a!==b)return show('Passwords do not match.');
+      document.getElementById('go').disabled=true;
+      P.sb.auth.updateUser({password:a}).then(function(r){
+        if(r.error){document.getElementById('go').disabled=false;return show(r.error.message);}
+        P.api('/api/me',{method:'POST',body:{action:'password_changed'}}).catch(function(){}).then(function(){
+          return P.sb.auth.refreshSession().catch(function(){});
+        }).then(function(){
+          show('Password saved. Taking you to the hub...','ok');
+          setTimeout(function(){location.replace('/');},1200);
+        });
+      });
+    });
+  });
+})();
+</script>
+</body></html>

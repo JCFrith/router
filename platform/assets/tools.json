@@ -1,0 +1,49 @@
+[
+  {
+    "id": "route-planner",
+    "name": "Route Planner",
+    "description": "Build and optimize multi-day store routes, then work them in the field.",
+    "icon": "🗺️",
+    "path": "/tools/route-planner.html",
+    "roles": ["owner", "admin", "user"],
+    "status": "live"
+  },
+  {
+    "id": "field-dashboard",
+    "name": "Field Dashboard",
+    "description": "Live view of saved routes and completed stores across all crews.",
+    "icon": "📍",
+    "path": "/tools/field-dashboard.html",
+    "adminOnly": true,
+    "status": "live"
+  },
+  {
+    "id": "field-log",
+    "name": "Field Log",
+    "description": "Trips, days worked and receipts for field contractors. Opens in its own app with its own sign-in.",
+    "icon": "🧾",
+    "path": "https://413-field-log.vercel.app",
+    "external": true,
+    "roles": ["owner", "admin", "user"],
+    "status": "live"
+  },
+  {
+    "id": "field-review",
+    "name": "Field Review",
+    "description": "Approve trips, review receipts and export payables. Opens in its own app with its own sign-in.",
+    "icon": "✅",
+    "path": "https://413-field-review.vercel.app",
+    "external": true,
+    "adminOnly": true,
+    "status": "live"
+  },
+  {
+    "id": "next-tool",
+    "name": "Next Tool",
+    "description": "Placeholder showing where the next internal tool plugs in.",
+    "icon": "🧩",
+    "path": "/tools/next-tool.html",
+    "roles": ["owner", "admin", "user"],
+    "status": "coming-soon"
+  }
+]

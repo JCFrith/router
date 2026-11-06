@@ -1,0 +1,6 @@
+{
+  "name": "413-platform",
+  "private": true,
+  "description": "413 Solution internal tools platform. Static pages plus Vercel serverless functions in /api.",
+  "engines": { "node": "22.x" }
+}

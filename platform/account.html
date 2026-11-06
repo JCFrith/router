@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/logo.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/topbar.css"><link rel="stylesheet" href="/assets/styles.css"><script src="/assets/vendor/supabase.js"></script>
+<script src="/assets/auth.js"></script>
+<title>Account · 413 Solution Tools</title></head>
+<body>
+<header id="topbar"></header>
+<main class="wrap stack" style="max-width:720px">
+  <h1>Your account</h1>
+  <div id="tempmsg" class="msg warn">You signed in with a temporary password. Set a new password below before continuing.</div>
+  <form class="card" id="pf" novalidate>
+    <h2>Profile</h2>
+    <div class="field"><label for="email">Email</label><input id="email" readonly></div>
+    <div class="row">
+      <div class="field"><label for="full_name">Full name</label><input id="full_name" autocomplete="name" maxlength="200"></div>
+      <div class="field"><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="tel" maxlength="40"></div>
+    </div>
+    <div class="field"><label for="address_line">Street address</label><input id="address_line" autocomplete="street-address" maxlength="200"></div>
+    <div class="row3">
+      <div class="field"><label for="city">City</label><input id="city" autocomplete="address-level2" maxlength="100"></div>
+      <div class="field"><label for="state">State</label><input id="state" autocomplete="address-level1" maxlength="40"></div>
+      <div class="field"><label for="postal_code">Postal code</label><input id="postal_code" autocomplete="postal-code" maxlength="20"></div>
+    </div>
+    <div id="pmsg" class="msg"></div>
+    <button class="btn" id="psave" type="submit">Save profile</button>
+  </form>
+  <form class="card" id="wf" novalidate>
+    <h2>Change password</h2>
+    <div class="row">
+      <div class="field"><label for="p1">New password (12 characters minimum)</label><input id="p1" type="password" autocomplete="new-password" minlength="12"></div>
+      <div class="field"><label for="p2">Confirm new password</label><input id="p2" type="password" autocomplete="new-password" minlength="12"></div>
+    </div>
+    <div id="wmsg" class="msg"></div>
+    <button class="btn" id="wsave" type="submit">Change password</button>
+  </form>
+</main>
+<script>
+Platform.ready.then(function(P){
+  var F=['full_name','phone','address_line','city','state','postal_code'];
+  function show(id,t,cls){var el=document.getElementById(id);el.textContent=t;el.className='msg show '+cls;}
+  var temp=!!(P.user.app_metadata&&P.user.app_metadata.must_change_password);
+  if(temp){document.getElementById('tempmsg').classList.add('show');document.getElementById('p1').focus();}
+  document.getElementById('email').value=P.user.email;
+  P.api('/api/me').then(function(d){F.forEach(function(k){document.getElementById(k).value=d.profile[k]||'';});})
+    .catch(function(e){show('pmsg','Could not load your profile: '+e.message,'err');});
+
+  document.getElementById('pf').addEventListener('submit',function(e){
+    e.preventDefault();
+    var body={};F.forEach(function(k){body[k]=document.getElementById(k).value;});
+    var b=document.getElementById('psave');b.disabled=true;
+    P.api('/api/me',{method:'PUT',body:body}).then(function(d){
+      show('pmsg','Profile saved.','ok');
+      P.name=d.profile.full_name||'';P.renderTopbar();
+    }).catch(function(e){show('pmsg','Save failed: '+e.message,'err');}).then(function(){b.disabled=false;});
+  });
+
+  document.getElementById('wf').addEventListener('submit',function(e){
+    e.preventDefault();
+    var a=document.getElementById('p1').value,c=document.getElementById('p2').value;
+    if(a.length<12)return show('wmsg','Password must be at least 12 characters.','err');
+    if(a!==c)return show('wmsg','Passwords do not match.','err');
+    var b=document.getElementById('wsave');b.disabled=true;
+    P.sb.auth.updateUser({password:a}).then(function(r){
+      if(r.error)throw r.error;
+      return P.api('/api/me',{method:'POST',body:{action:'password_changed'}}).then(function(){return P.sb.auth.refreshSession();});
+    }).then(function(){
+      document.getElementById('p1').value='';document.getElementById('p2').value='';
+      document.getElementById('tempmsg').classList.remove('show');
+      show('wmsg','Password changed.'+(temp?' You can now use the tools.':''),'ok');temp=false;
+    }).catch(function(e){show('wmsg','Password change failed: '+(e.message||e),'err');}).then(function(){b.disabled=false;});
+  });
+});
+</script>
+</body></html>
