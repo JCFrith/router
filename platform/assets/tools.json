@@ -57,18 +57,5 @@
       "user"
     ],
     "status": "coming-soon"
-  },
-  {
-    "id": "qa-check",
-    "name": "QA Check",
-    "description": "Temporary card for acceptance test 10.",
-    "icon": "🧪",
-    "path": "/tools/qa-check.html",
-    "roles": [
-      "owner",
-      "admin",
-      "user"
-    ],
-    "status": "coming-soon"
   }
 ]
