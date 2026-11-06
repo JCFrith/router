@@ -5,7 +5,11 @@
     "description": "Build and optimize multi-day store routes, then work them in the field.",
     "icon": "🗺️",
     "path": "/tools/route-planner.html",
-    "roles": ["owner", "admin", "user"],
+    "roles": [
+      "owner",
+      "admin",
+      "user"
+    ],
     "status": "live"
   },
   {
@@ -24,7 +28,11 @@
     "icon": "🧾",
     "path": "https://413-field-log.vercel.app",
     "external": true,
-    "roles": ["owner", "admin", "user"],
+    "roles": [
+      "owner",
+      "admin",
+      "user"
+    ],
     "status": "live"
   },
   {
@@ -43,7 +51,24 @@
     "description": "Placeholder showing where the next internal tool plugs in.",
     "icon": "🧩",
     "path": "/tools/next-tool.html",
-    "roles": ["owner", "admin", "user"],
+    "roles": [
+      "owner",
+      "admin",
+      "user"
+    ],
+    "status": "coming-soon"
+  },
+  {
+    "id": "qa-check",
+    "name": "QA Check",
+    "description": "Temporary card for acceptance test 10.",
+    "icon": "🧪",
+    "path": "/tools/qa-check.html",
+    "roles": [
+      "owner",
+      "admin",
+      "user"
+    ],
     "status": "coming-soon"
   }
 ]

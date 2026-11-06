@@ -257,7 +257,7 @@ document.getElementById("applyBtn").addEventListener("click",function(){
     drawStores();
 });
 document.getElementById("refreshBtn").addEventListener("click",async function(){await loadRoutes();await loadEvents();drawStores()});
-Platform.ready.then(function(P){sb=P.sb;boot();});
+Platform.ready.then(function(P){sb=P.sb;map.invalidateSize();boot();});
 </script>
 </body>
 </html>
