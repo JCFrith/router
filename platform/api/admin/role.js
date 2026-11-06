@@ -3,6 +3,8 @@ const A = require('../../lib/auth');
 const { prepare } = require('../../lib/target');
 
 module.exports = async (req, res) => {
+  // Authenticate before validating input, so unauthenticated callers always get 401.
+  if (!(await A.requireRole(req, res, ['owner', 'admin']))) return;
   const role = String((req.body && req.body.role) || '');
   if (!A.ROLES.includes(role)) return A.send(res, 400, { error: 'Role must be owner, admin or user' });
   const t = await prepare(req, res, 'role', { newRole: role });
