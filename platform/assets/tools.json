@@ -28,10 +28,9 @@
   {
     "id": "field-log",
     "name": "Field Log",
-    "description": "Trips, days worked and receipts for field contractors. Opens in its own app with its own sign-in.",
+    "description": "Trips, days worked and receipts for field contractors.",
     "icon": "🧾",
-    "path": "https://413-field-log.vercel.app",
-    "external": true,
+    "path": "/tools/field-log.html",
     "roles": [
       "owner",
       "admin",
@@ -42,10 +41,9 @@
   {
     "id": "field-review",
     "name": "Field Review",
-    "description": "Approve trips, review receipts and export payables. Opens in its own app with its own sign-in.",
+    "description": "Approve trips, review receipts and export payables and invoices.",
     "icon": "✅",
-    "path": "https://413-field-review.vercel.app",
-    "external": true,
+    "path": "/tools/field-review.html",
     "adminOnly": true,
     "status": "live"
   },

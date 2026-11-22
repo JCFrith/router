@@ -19,13 +19,14 @@
 }
 /* Top bar */
 #topbar{position:sticky;top:0;box-sizing:border-box;font-family:var(--font);font-size:15px;line-height:1.45;z-index:6000;height:var(--topbar-h);background:var(--c-bar);color:var(--c-bar-text);display:flex;align-items:center;gap:14px;padding:0 16px}
-#topbar a{color:var(--c-bar-text);text-decoration:none}
-#topbar .brand{display:flex;align-items:center;gap:10px;font-weight:600;white-space:nowrap;margin-right:auto;min-width:0}
-#topbar .brand img{width:30px;height:30px;background:#fff;border-radius:6px;padding:2px}
-#topbar .who{max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;opacity:.92}
-#topbar .who:hover,#topbar .adminlink:hover{text-decoration:underline}
-#topbar .adminlink{font-size:14px}
-#topbar button{background:transparent;color:var(--c-bar-text);border:1px solid rgba(255,255,255,.45);border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer}
+#topbar a{color:var(--c-bar-text);text-decoration:none;letter-spacing:normal;text-transform:none;font-weight:400;border:0;padding:0;margin:0;background:none;display:inline}
+#topbar .tb-brand{font-weight:600}
+#topbar .tb-brand{display:flex;align-items:center;gap:10px;font-weight:600;white-space:nowrap;margin-right:auto;min-width:0}
+#topbar .tb-brand img{width:30px;height:30px;background:#fff;border-radius:6px;padding:2px}
+#topbar .tb-who{display:inline-block;max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;opacity:.92}
+#topbar .tb-who:hover,#topbar .tb-admin:hover{text-decoration:underline}
+#topbar .tb-admin{font-size:14px}
+#topbar button{letter-spacing:normal;text-transform:none;font-weight:400;width:auto;margin:0;background:transparent;color:var(--c-bar-text);border:1px solid rgba(255,255,255,.45);border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer}
 #topbar button:hover{background:rgba(255,255,255,.1)}
-@media (max-width:560px){#topbar{gap:10px;padding:0 10px}#topbar .brand span{display:none}#topbar .who{max-width:38vw}}
+@media (max-width:560px){#topbar{gap:10px;padding:0 10px}#topbar .tb-brand span{display:none}#topbar .tb-who{max-width:38vw}}
 

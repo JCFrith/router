@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Field Review · 413 Solution Tools</title>
+<link rel="icon" href="/assets/logo.png">
+<link rel="stylesheet" href="/assets/topbar.css">
+<style>/* Platform edition: keep the app's sticky headers below the shared top bar */
+  .view header{top:var(--topbar-h)} .view nav{top:var(--topbar-h)}</style>
+<script src="/assets/vendor/supabase.js"></script>
+<script src="/assets/auth.js"></script>
+<style>
+  :root{
+    --blue:#3B79B4; --charcoal:#3D464D; --teal:#2E7D7B; --black:#0A0A0A;
+    --paper:#F2F3F4; --line:#D6DADD; --warn:#B4523B; --r:2px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--black);
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45}
+  header{background:var(--black);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 20px 14px;position:sticky;top:0;z-index:30}
+  .brand{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#8A939A;font-weight:600}
+  .htitle{font-size:20px;font-weight:650;margin-top:2px;letter-spacing:-.01em}
+  .hmeta{font-size:12px;color:#9AA3AA;margin-top:1px}
+  .adminlink{display:inline-block;margin-top:10px;color:#8FB4D8;text-decoration:none;
+    font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid #2C353B;border-radius:2px;padding:7px 11px}
+  .adminlink:active{background:#1A1F23}
+  .hback{background:none;border:0;color:#8A939A;font:inherit;font-size:12px;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;padding:0 0 6px;cursor:pointer}
+  main{padding:20px;max-width:1000px;margin:0 auto;padding-bottom:60px}
+  .view{display:none} .view.on{display:block}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
+  h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--charcoal);margin:0 0 14px;font-weight:700}
+  label{display:block;font-size:12px;font-weight:600;color:var(--charcoal);margin-bottom:5px}
+  input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);
+    font:inherit;font-size:16px;background:#fff;color:var(--black)}
+  textarea{min-height:76px;resize:vertical}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-offset:-1px;border-color:var(--blue)}
+  .row{display:grid;gap:12px;margin-bottom:12px}
+  button.act{background:var(--blue);color:#fff;border:0;border-radius:var(--r);padding:12px 18px;
+    font:inherit;font-weight:650;font-size:15px;cursor:pointer;width:100%}
+  button.act.go{background:var(--teal)} button.act:active{filter:brightness(.92)}
+  button.act.ghost{background:#fff;color:var(--charcoal);border:1px solid var(--line)}
+  button.act.warn{background:#fff;color:var(--warn);border:1px solid var(--line)}
+  button.act[disabled]{opacity:.45;cursor:default}
+  .btnrow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .filters button{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:8px 14px;
+    font:inherit;font-size:13px;font-weight:600;color:var(--charcoal);cursor:pointer}
+  .filters button.on{background:var(--black);color:#fff;border-color:var(--black)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px}
+  .kpi .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6B747B;font-weight:700}
+  .kpi .v{font-size:24px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:3px}
+  .trip{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);
+    border-radius:var(--r);padding:16px;margin-bottom:10px;cursor:pointer;font:inherit}
+  .trip:hover{border-color:var(--blue)}
+  .trip .who{font-size:12px;color:#6B747B;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .trip .nm{font-weight:650;font-size:17px;margin-top:2px}
+  .trip .dt{font-size:13px;color:#6B747B;margin-top:3px}
+  .trip .tot{font-weight:700;font-variant-numeric:tabular-nums;margin-top:8px;font-size:17px}
+  .st{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:2px;float:right}
+  .st.draft{background:#EAECEE;color:var(--charcoal)}
+  .st.submitted{background:#E3ECF5;color:#2F6294}
+  .st.approved,.st.paid{background:#E4F0EF;color:var(--teal)}
+  .st.returned{background:#F6E8E4;color:var(--warn)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  td,th{padding:9px 0;text-align:left;border-bottom:1px solid var(--line)}
+  th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6B747B;font-weight:700}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  tr.sum td{font-weight:700;border-bottom:2px solid var(--black)}
+  .due{background:var(--black);color:#fff;padding:18px;border-radius:var(--r);margin-bottom:16px}
+  .due .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8A939A;font-weight:700}
+  .due .v{font-size:34px;font-weight:700;letter-spacing:-.025em;font-variant-numeric:tabular-nums;margin-top:2px}
+  .due .n{font-size:12px;color:#9AA3AA;margin-top:6px}
+  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+  .g{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff}
+  .g img{width:100%;height:150px;object-fit:cover;display:block;background:#EAECEE;cursor:zoom-in}
+  .pdftile{height:150px;background:#EAECEE;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:4px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .pdftile span{font-size:15px;font-weight:700;letter-spacing:.1em;color:var(--charcoal)}
+  .pdftile small{font-size:11px;color:#6B747B;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+  .pdftile:hover{background:#E1E4E6}
+  .g .cap{padding:8px 10px;font-size:12px;line-height:1.35}
+  .g .cap b{display:block;font-size:13px}
+  .g .cap .m{color:#6B747B}
+  .g.own{border-left:3px solid var(--warn)}
+  .empty{text-align:center;color:#8A939A;font-size:14px;padding:34px 12px;border:1px dashed var(--line);border-radius:var(--r)}
+  .hint{font-size:12px;color:#6B747B;margin-top:8px;line-height:1.4}
+  .msg{font-size:13px;padding:10px 12px;border-radius:var(--r);margin-bottom:12px;display:none}
+  .msg.on{display:block}
+  .msg.work{background:#E3ECF5;color:#2F6294}
+  .msg.bad{background:#F6E8E4;color:var(--warn)}
+  .msg.good{background:#E4F0EF;color:var(--teal)}
+  .center{min-height:70vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .login{width:100%;max-width:380px}
+  .foot{text-align:center;font-size:11px;color:#98A0A6;padding:24px 0;letter-spacing:.04em}
+  .lb{position:fixed;inset:0;background:rgba(10,10,10,.94);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .lb.on{display:flex}
+  .lb img{max-width:100%;max-height:92vh;object-fit:contain}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;
+    border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body data-tool="field-review">
+<header id="topbar"></header>
+
+<div class="view" id="v-login">
+  <div class="center"><div class="login">
+    <div style="text-align:center;margin-bottom:22px">
+      <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#8A939A;font-weight:700">413 Solution</div>
+      <div style="font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:3px">Field Log Review</div>
+    </div>
+    <div class="card">
+      <div class="msg" id="lMsg"></div>
+      <div class="row"><div><label for="lEmail">Email</label><input id="lEmail" type="email" autocomplete="username"></div></div>
+      <div class="row"><div><label for="lPass">Password</label><input id="lPass" type="password" autocomplete="current-password"></div></div>
+      <button class="act" id="bLogin">Sign in</button>
+    </div>
+  </div></div>
+</div>
+
+<div class="view" id="v-list">
+  <header>
+    <div class="brand">413 Solution</div>
+    <div class="htitle">Field Log Review</div>
+    <div class="hmeta" id="lsWho"></div>
+    <a class="adminlink" href="/tools/field-log.html">&larr; My field log</a>
+  </header>
+  <main>
+    <div class="msg" id="lsMsg"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="filters" id="filters">
+      <button data-f="submitted" class="on">Waiting on you</button>
+      <button data-f="approved">Approved</button>
+      <button data-f="paid">Paid</button>
+      <button data-f="returned">Sent back</button>
+      <button data-f="draft">In progress</button>
+      <button data-f="all">All</button>
+    </div>
+    <div id="lsTrips"><div class="empty">Loading</div></div>
+    <div class="card" style="margin-top:16px">
+      <h2>Export</h2>
+      <div class="row"><div>
+        <label for="xFrom">Approved and paid trips, submitted on or after</label>
+        <input id="xFrom" type="date">
+      </div></div>
+      <div class="btnrow">
+        <button class="act ghost" id="bXExp">Expenses CSV</button>
+        <button class="act ghost" id="bXPay">Payables CSV</button>
+      </div>
+      <div class="hint">Payables is one row per trip for what you owe. Expenses is one row per receipt for the books.</div>
+    </div>
+    <button class="act ghost" id="bOut">Sign out</button>
+    <div class="foot">413 SOLUTION, LLC</div>
+  </main>
+</div>
+
+<div class="view" id="v-trip">
+  <header>
+    <button class="hback" id="bBack">&larr; All trips</button>
+    <div class="htitle" id="tTitle">Trip</div>
+    <div class="hmeta" id="tMeta"></div>
+  </header>
+  <main>
+    <div class="due">
+      <div class="k">Owed to contractor</div>
+      <div class="v" id="dVal">$0</div>
+      <div class="n" id="dNote"></div>
+    </div>
+    <div class="card">
+      <h2>Breakdown</h2>
+      <table id="tTable"></table>
+    </div>
+    <div class="card">
+      <h2>Days worked</h2>
+      <div id="dList"></div>
+    </div>
+    <div class="card">
+      <h2>Receipts</h2>
+      <div class="gal" id="gal"></div>
+      <div class="btnrow" style="margin-top:14px">
+        <button class="act ghost" id="bDlImgs">Download invoice + receipts (zip)</button>
+        <button class="act ghost" id="bDlCsv">Download this trip CSV</button>
+      </div>
+    </div>
+    <div class="card" id="actBox">
+      <h2>Decision</h2>
+      <div class="msg" id="aMsg"></div>
+      <div class="row"><div>
+        <label for="aNote">Note to contractor</label>
+        <textarea id="aNote" placeholder="Required when sending back"></textarea>
+      </div></div>
+      <div class="btnrow">
+        <button class="act go" id="bApprove">Approve</button>
+        <button class="act warn" id="bReturn">Send back</button>
+      </div>
+      <button class="act ghost" id="bPaid" style="margin-top:10px">Mark paid</button>
+    </div>
+    <div class="foot">413 SOLUTION, LLC</div>
+  </main>
+</div>
+
+<div class="lb" id="lb"><img id="lbImg" alt=""></div>
+
+<script type="module">
+import JSZip from 'https://esm.sh/jszip@3.10.1';
+import { buildInvoicePdf, invoiceFilename } from './invoice-pdf.js';
+
+// Platform edition: one sign-in for every tool. The client comes from /assets/auth.js.
+const sb=(await window.Platform.ready).sb;
+
+const CATS=['Air fare','Rental car','Gas','Misc transportation','Hotel','Misc'];
+const $=id=>document.getElementById(id);
+const money=n=>'$'+(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const money0=n=>'$'+Math.round(Number(n)||0).toLocaleString('en-US');
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=iso=>{ if(!iso) return ''; const [y,m,d]=iso.split('-'); return m+'/'+d+'/'+y.slice(2); };
+const slug=s=>String(s||'trip').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'trip';
+
+let me=null, all=[], filter='submitted', trip=null, days=[], receipts=[], urls={};
+
+function show(v){ document.querySelectorAll('.view').forEach(x=>x.classList.remove('on')); $('v-'+v).classList.add('on'); window.scrollTo(0,0); }
+function msg(el,t,k){ const e=$(el); if(!t){e.className='msg';return;} e.className='msg on '+(k||'work'); e.innerHTML=t; }
+
+$('bLogin').onclick=async()=>{
+  const email=$('lEmail').value.trim(), password=$('lPass').value;
+  if(!email||!password){ msg('lMsg','Enter your email and password.','bad'); return; }
+  $('bLogin').disabled=true; msg('lMsg','<span class="spin"></span>Signing in','work');
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  $('bLogin').disabled=false;
+  if(error){ msg('lMsg',esc(error.message),'bad'); return; }
+  msg('lMsg',''); boot();
+};
+$('lPass').addEventListener('keydown',e=>{ if(e.key==='Enter') $('bLogin').click(); });
+$('bOut').onclick=()=>window.Platform.signOut();
+
+async function boot(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){ show('login'); return; }
+  // Role lives in auth app_metadata (set by the 413 platform admin page). Refresh to pick up changes.
+  const {data:fresh}=await sb.auth.refreshSession();
+  me=(fresh&&fresh.session&&fresh.session.user)||session.user;
+  const appRole=(me.app_metadata||{}).role;
+  const {data:p}=await sb.from('fl_profiles').select('*').eq('id',me.id).maybeSingle();
+  if(appRole!=='owner'&&appRole!=='admin'){
+    show('login');
+    msg('lMsg','That account is not an admin. Use the contractor app instead.','bad');
+    return;
+  }
+  $('lsWho').textContent=(p&&p.full_name)||me.email;
+  show('list'); loadAll();
+}
+
+async function loadAll(){
+  const {data,error}=await sb.from('fl_trip_summary').select('*').order('submitted_at',{ascending:false,nullsFirst:false});
+  if(error){ $('lsTrips').innerHTML='<div class="empty">'+esc(error.message)+'</div>'; return; }
+  all=data||[]; drawKpis(); drawList();
+}
+function drawKpis(){
+  const waiting=all.filter(t=>t.status==='submitted');
+  const owed=all.filter(t=>['submitted','approved'].includes(t.status)).reduce((s,t)=>s+Number(t.amount_due||0),0);
+  const card=all.filter(t=>t.status!=='draft').reduce((s,t)=>s+Number(t.card_spend||0),0);
+  const dd=all.filter(t=>t.status!=='draft');
+  const totDays=dd.reduce((s,t)=>s+Number(t.days_worked||0),0);
+  const totStores=dd.reduce((s,t)=>s+Number(t.stores_completed||0),0);
+  $('kpis').innerHTML=`
+    <div class="kpi"><div class="k">Waiting on you</div><div class="v">${waiting.length}</div></div>
+    <div class="kpi"><div class="k">Owed out</div><div class="v">${money0(owed)}</div></div>
+    <div class="kpi"><div class="k">Card spend</div><div class="v">${money0(card)}</div></div>
+    <div class="kpi"><div class="k">Stores per day</div><div class="v">${totDays?(totStores/totDays).toFixed(1):'--'}</div></div>`;
+}
+$('filters').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  $('filters').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); filter=b.dataset.f; drawList();
+});
+function drawList(){
+  const rows=filter==='all'?all:all.filter(t=>t.status===filter);
+  if(!rows.length){ $('lsTrips').innerHTML='<div class="empty">Nothing here.</div>'; return; }
+  $('lsTrips').innerHTML=rows.map(t=>`
+    <button class="trip" data-id="${t.id}">
+      <span class="st ${t.status}">${t.status}</span>
+      <div class="who">${esc(t.contractor_name||t.contractor_email||'Unknown')}</div>
+      <div class="nm">${esc(t.name)||'Untitled trip'}</div>
+      <div class="dt">${t.start_date?fmt(t.start_date)+' to '+fmt(t.end_date):'No dates'} &middot; ${t.days_worked} days &middot; ${t.receipt_count} receipts${t.stores_completed?' &middot; '+t.stores_completed+' stores':''}</div>
+      <div class="tot">${money(t.amount_due)} due &middot; <span style="font-weight:400;color:#6B747B">${money(t.card_spend)} on card</span></div>
+    </button>`).join('');
+  $('lsTrips').querySelectorAll('.trip').forEach(b=>b.onclick=()=>openTrip(b.dataset.id));
+}
+
+$('bBack').onclick=()=>{ trip=null; show('list'); loadAll(); };
+
+async function openTrip(id){
+  const {data:t,error}=await sb.from('fl_trip_summary').select('*').eq('id',id).single();
+  if(error){ msg('lsMsg',esc(error.message),'bad'); return; }
+  trip=t;
+  const [{data:d},{data:r}]=await Promise.all([
+    sb.from('fl_trip_days').select('*').eq('trip_id',id).order('work_date'),
+    sb.from('fl_receipts').select('*').eq('trip_id',id).order('receipt_date',{nullsFirst:false})
+  ]);
+  days=d||[]; receipts=r||[]; urls={};
+  drawTrip(); show('trip');
+}
+
+function totals(){
+  const by={}; CATS.forEach(c=>by[c]={card:0,own:0});
+  receipts.forEach(r=>{ const a=Number(r.amount)||0; const c=by[r.category]||by['Misc'];
+    if(r.paid_with==='Personal') c.own+=a; else c.card+=a; });
+  const own=CATS.reduce((s,c)=>s+by[c].own,0), card=CATS.reduce((s,c)=>s+by[c].card,0);
+  const pay=days.length*Number(trip.day_rate);
+  return {by,own,card,pay,due:pay+own};
+}
+
+async function drawTrip(){
+  const t=totals();
+  $('tTitle').textContent=trip.name||'Untitled trip';
+  $('tMeta').textContent=(trip.contractor_name||trip.contractor_email)+'  /  '+
+    (trip.start_date?fmt(trip.start_date)+' to '+fmt(trip.end_date):'No dates')+'  /  '+trip.status;
+  $('dVal').textContent=money(t.due);
+  $('dNote').textContent=money0(t.pay)+' day pay plus '+money(t.own)+' out of pocket. '+money(t.card)+' on the 413 card, not reimbursed.';
+
+  let h='<tr><th>Category</th><th class="n">413 card</th><th class="n">Out of pocket</th></tr>';
+  CATS.forEach(c=>{ const r=t.by[c]; if(!r.card&&!r.own) return;
+    h+=`<tr><td>${c}</td><td class="n">${money(r.card)}</td><td class="n">${money(r.own)}</td></tr>`; });
+  h+=`<tr class="sum"><td>Expenses</td><td class="n">${money(t.card)}</td><td class="n">${money(t.own)}</td></tr>`;
+  h+=`<tr><td>Days worked at ${money0(trip.day_rate)}</td><td class="n"></td><td class="n">${days.length}</td></tr>`;
+  h+=`<tr class="sum"><td>Day pay</td><td class="n"></td><td class="n">${money(t.pay)}</td></tr>`;
+  if(trip.stores_completed) h+=`<tr><td>Stores completed</td><td class="n"></td><td class="n">${trip.stores_completed} (${days.length?(trip.stores_completed/days.length).toFixed(1):'--'} per day)</td></tr>`;
+  $('tTable').innerHTML=h;
+
+  $('dList').innerHTML=days.length
+    ? days.map(d=>fmt(d.work_date)).join(' &middot; ')
+    : '<div class="empty">No days selected.</div>';
+
+  if(!receipts.length){ $('gal').innerHTML='<div class="empty">No receipts.</div>'; }
+  else{
+    $('gal').innerHTML=receipts.map(r=>`
+      <div class="g${r.paid_with==='Personal'?' own':''}">
+        ${/\.pdf$/i.test(r.storage_path||'')
+          ? `<div class="pdftile" data-open="${esc(r.storage_path)}"><span>PDF</span><small>Open</small></div>`
+          : `<img data-src="${esc(r.storage_path||'')}" alt="">`}
+        <div class="cap"><b>${esc(r.vendor)||'Untitled'}</b>
+          <span class="m">${r.receipt_date?fmt(r.receipt_date):'No date'} &middot; ${esc(r.category)}</span>
+          <span class="m">${r.paid_with}${r.note?' &middot; '+esc(r.note):''}</span>
+          <b style="font-variant-numeric:tabular-nums">${money(r.amount)}</b></div>
+      </div>`).join('');
+    for(const img of $('gal').querySelectorAll('img[data-src]')){
+      const p=img.dataset.src; if(!p) continue;
+      const u=await signed(p); if(u){ img.src=u; img.onclick=()=>{ $('lbImg').src=u; $('lb').classList.add('on'); }; }
+    }
+    $('gal').querySelectorAll('.pdftile[data-open]').forEach(el=>{
+      el.onclick=async()=>{ const u=await signed(el.dataset.open); if(u) window.open(u,'_blank','noopener'); };
+    });
+  }
+  const open=trip.status==='submitted';
+  $('actBox').style.display=['submitted','approved'].includes(trip.status)?'block':'none';
+  $('bApprove').disabled=!open; $('bReturn').disabled=!open;
+  $('bPaid').style.display=trip.status==='approved'?'block':'none';
+  $('aNote').value=trip.admin_note||'';
+  msg('aMsg','');
+}
+$('lb').onclick=()=>$('lb').classList.remove('on');
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('lb').classList.remove('on'); });
+
+async function signed(path){
+  if(urls[path]) return urls[path];
+  const {data}=await sb.storage.from('fl-receipts').createSignedUrl(path,3600);
+  urls[path]=data?data.signedUrl:''; return urls[path];
+}
+
+async function setStatus(status,note){
+  const {error}=await sb.from('fl_trips')
+    .update({status,admin_note:note??null,reviewed_at:new Date().toISOString()})
+    .eq('id',trip.id);
+  if(error){ msg('aMsg',esc(error.message),'bad'); return false; }
+  const {data:t}=await sb.from('fl_trip_summary').select('*').eq('id',trip.id).single();
+  trip=t; drawTrip(); return true;
+}
+$('bApprove').onclick=async()=>{
+  if(!confirm('Approve '+money(totals().due)+' to '+(trip.contractor_name||trip.contractor_email)+'?')) return;
+  if(await setStatus('approved',$('aNote').value.trim()||null)) msg('aMsg','Approved.','good');
+};
+$('bReturn').onclick=async()=>{
+  const note=$('aNote').value.trim();
+  if(!note){ msg('aMsg','Add a note so they know what to fix.','bad'); return; }
+  if(await setStatus('returned',note)) msg('aMsg','Sent back.','good');
+};
+$('bPaid').onclick=async()=>{
+  if(!confirm('Mark this trip paid?')) return;
+  if(await setStatus('paid',trip.admin_note)) msg('aMsg','Marked paid.','good');
+};
+
+/* ---------- export ---------- */
+function csv(rows){ return rows.map(r=>r.map(v=>{
+  const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(',')).join('\r\n'); }
+function dl(name,content){
+  const b=new Blob([content],{type:'text/csv;charset=utf-8'});
+  const u=URL.createObjectURL(b); const a=document.createElement('a');
+  a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),4000);
+}
+
+$('bDlCsv').onclick=()=>{
+  dl(slug(trip.contractor_name)+'-'+slug(trip.name)+'.csv',csv(tripCsvRows()));
+};
+function dlBlob(name,blob){
+  const u=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),8000);
+}
+function tripCsvRows(){
+  const rows=[['Date','Vendor','Category','Amount','Paid with','Reimbursable','Contractor','Trip','Note']];
+  receipts.forEach(r=>rows.push([r.receipt_date,r.vendor,r.category,(Number(r.amount)||0).toFixed(2),
+    r.paid_with,r.paid_with==='Personal'?'Yes':'No',trip.contractor_name,trip.name,r.note]));
+  rows.push([]);
+  rows.push(['Days worked',days.length,'','','','','','','']);
+  rows.push(['Day rate','',(Number(trip.day_rate)).toFixed(2),'','','','','','']);
+  rows.push(['Day pay','','',(days.length*Number(trip.day_rate)).toFixed(2),'','','','','']);
+  rows.push(['Amount due','','',totals().due.toFixed(2),'','','','','']);
+  return rows;
+}
+$('bDlImgs').onclick=async()=>{
+  const btn=$('bDlImgs'), label=btn.textContent;
+  const withFiles=receipts.filter(r=>r.storage_path);
+  if(!withFiles.length){ msg('aMsg','No receipt files on this trip.','bad'); return; }
+  btn.disabled=true;
+  try{
+    const zip=new JSZip();
+    const used={};
+    let ok=0, failed=[], pdfErr=null;
+    for(let i=0;i<withFiles.length;i++){
+      const r=withFiles[i];
+      btn.textContent='Zipping '+(i+1)+' of '+withFiles.length;
+      try{
+        const u=await signed(r.storage_path);
+        if(!u) throw new Error('no url');
+        const res=await fetch(u);
+        if(!res.ok) throw new Error('http '+res.status);
+        const blob=await res.blob();
+        const ext=/\.pdf$/i.test(r.storage_path)?'pdf':'jpg';
+        let nm=[(r.receipt_date||'no-date'),slug(r.vendor||'vendor'),(Number(r.amount)||0).toFixed(2)].join('_');
+        // two receipts can share date+vendor+amount, so keep names unique
+        if(used[nm]!==undefined){ used[nm]++; nm=nm+'_'+used[nm]; } else { used[nm]=0; }
+        zip.file(nm+'.'+ext,blob);
+        ok++;
+      }catch(e){ failed.push(r.vendor||r.storage_path); }
+    }
+    if(!ok){ msg('aMsg','Could not fetch any receipt files.','bad'); return; }
+    // drop the trip summary in alongside the images
+    zip.file('_summary.csv',csv(tripCsvRows()));
+    // and the full invoice: day-by-day pay plus itemized expenses.
+    // buildInvoicePdf derives its own totals from days+receipts, so it cannot
+    // drift from the numbers on this screen.
+    try{
+      const payload={trip,days,receipts};
+      zip.file(invoiceFilename(payload),buildInvoicePdf(payload));
+    }catch(e){ pdfErr=e.message||String(e); }
+    btn.textContent='Building zip';
+    const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
+    dlBlob(slug(trip.contractor_name)+'-'+slug(trip.name)+'-receipts.zip',blob);
+    let note=ok+' receipts zipped.';
+    if(!pdfErr) note+=' Invoice included.';
+    if(failed.length) note+=' '+failed.length+' could not be fetched: '+esc(failed.join(', '));
+    if(pdfErr) note+=' Invoice PDF failed: '+esc(pdfErr);
+    msg('aMsg', note, (failed.length||pdfErr)?'bad':'good');
+  }catch(e){
+    msg('aMsg','Zip failed: '+esc(e.message||e),'bad');
+  }finally{
+    btn.disabled=false; btn.textContent=label;
+  }
+};
+
+async function exportRange(kind){
+  const from=$('xFrom').value||null;
+  let q=sb.from('fl_trip_summary').select('*').in('status',['approved','paid']);
+  if(from) q=q.gte('submitted_at',from+'T00:00:00Z');
+  const {data:trips,error}=await q.order('submitted_at');
+  if(error){ msg('lsMsg',esc(error.message),'bad'); return; }
+  if(!trips.length){ msg('lsMsg','No approved or paid trips in that range.','bad'); return; }
+
+  if(kind==='pay'){
+    const rows=[['Contractor','Email','Trip','Start','End','Days','Day rate','Day pay','Out of pocket','Amount due','Card spend','Stores','Status']];
+    trips.forEach(t=>rows.push([t.contractor_name,t.contractor_email,t.name,t.start_date,t.end_date,
+      t.days_worked,Number(t.day_rate).toFixed(2),Number(t.day_pay).toFixed(2),Number(t.out_of_pocket).toFixed(2),
+      Number(t.amount_due).toFixed(2),Number(t.card_spend).toFixed(2),t.stores_completed,t.status]));
+    dl('413-payables.csv',csv(rows)); msg('lsMsg','Exported '+trips.length+' trips.','good'); return;
+  }
+
+  const ids=trips.map(t=>t.id);
+  const byId=Object.fromEntries(trips.map(t=>[t.id,t]));
+  const {data:rc,error:e2}=await sb.from('fl_receipts').select('*').in('trip_id',ids).order('receipt_date');
+  if(e2){ msg('lsMsg',esc(e2.message),'bad'); return; }
+  const rows=[['Date','Vendor','Category','Amount','Paid with','Reimbursable','Contractor','Trip','Note']];
+  (rc||[]).forEach(r=>{ const t=byId[r.trip_id]||{};
+    rows.push([r.receipt_date,r.vendor,r.category,(Number(r.amount)||0).toFixed(2),r.paid_with,
+      r.paid_with==='Personal'?'Yes':'No',t.contractor_name,t.name,r.note]); });
+  dl('413-expenses.csv',csv(rows));
+  msg('lsMsg','Exported '+(rc||[]).length+' receipts.','good');
+}
+$('bXPay').onclick=()=>exportRange('pay');
+$('bXExp').onclick=()=>exportRange('exp');
+
+sb.auth.onAuthStateChange(e=>{ if(e==='SIGNED_OUT') show('login'); });
+boot();
+</script>
+</body>
+</html>

@@ -80,9 +80,9 @@
     if (!bar) { bar = document.createElement('header'); bar.id = 'topbar'; document.body.insertBefore(bar, document.body.firstChild); }
     var label = P.name || (P.user && P.user.email) || '';
     bar.innerHTML =
-      '<a class="brand" href="/"><img src="/assets/logo.png" alt=""><span>413 Solution Tools</span></a>' +
-      (P.isAdmin() ? '<a class="adminlink" href="/admin.html">Admin</a>' : '') +
-      '<a class="who" href="/account.html" title="Your account">' + esc(label) + '</a>' +
+      '<a class="tb-brand" href="/"><img src="/assets/logo.png" alt=""><span>413 Solution Tools</span></a>' +
+      (P.isAdmin() ? '<a class="tb-admin" href="/admin.html">Admin</a>' : '') +
+      '<a class="tb-who" href="/account.html" title="Your account">' + esc(label) + '</a>' +
       '<button type="button" id="signOutTop">Sign out</button>';
     document.getElementById('signOutTop').addEventListener('click', P.signOut);
   };
