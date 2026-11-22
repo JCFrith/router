@@ -17,6 +17,9 @@ admin.html            user management (Admin, Owner)
 tools/                one page per tool
   route-planner.html  migrated from jcfrith.github.io/router
   field-dashboard.html migrated from jcfrith.github.io/router/dashboard.html
+  field-log.html      migrated from the 413-field-log Vercel app
+  field-review.html   migrated from the 413-field-review Vercel app (admin only)
+  invoice-pdf.js      invoice generator used by field-review
   next-tool.html      coming-soon placeholder
 assets/
   auth.js             shared gate, top bar, Platform.api() helper
